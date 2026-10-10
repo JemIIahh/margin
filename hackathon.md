@@ -47,6 +47,15 @@ Solo. Registered team name: Sofer.
 - Reading the first traces found two gaps in the shared core, fixed with a failing test first and then both arms re-run: tool errors leaked the absolute worktree path and Python internals, and `run_tests` named the failing tests without saying why. It now shows the assertion message.
 - Reading the result found a bug in the price calibration: the smoke-test run was counted as a fifth calibration task (price $0.2437). The calibration now takes the manifest's calibration tasks only.
 
+### 2026-10-10 (benchmark)
+
+- Ran the three arms on the 12 evaluation tasks, one run per task, after freezing the shared core: arm A (whole files) solved 8 of 12 for $2.09; arm B (graph context) 11 of 12 for $1.20; arm C (graph context, quote, governor) 9 of 12 for $1.16 and billed $3.13 against $3.31 for B at the flat price. Graph context cut the cost of a solved fix by more than half; the quote and governor did not improve on plain graph context in this sample (`docs/notes/arm-c-evaluation.md`).
+- The quote's band held the actual cost on 10 of 12 arm C runs, and 14 of 16 in a leave-one-out check on arm B. The one run the governor plausibly lost was `marshmallow-2249`, where the quote's upper band was below what the task needed.
+- Kept the spec's governor thresholds: the early and late sweeps were not run (four calibration tasks cannot rank them, and the event's shared allowance was being spent), recorded in `docs/notes/tuning.md`.
+- Injected a flaky test, a test timeout and an API overload into live runs and killed and resumed another; all four ended verified (`docs/evidence/failure-recovery.md`). The neatlogs read-back was returning 502 at the time, so those traces were not checked in the dashboard.
+- Checked in the neatlogs dashboard: the four run tags and the span tree render; the proxy model is shown at $0 because neatlogs does not price it; the custom span attributes were not checked.
+- Generated the results page, the receipts page (checked at 390px) and the business-plan inputs from the stored ledger. Spend so far: $7.32 of the event's $20 allowance.
+
 ## Demo
 
 Not available yet.
