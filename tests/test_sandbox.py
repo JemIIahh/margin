@@ -198,3 +198,25 @@ def test_junit_ids_do_not_depend_on_where_the_worktree_lives(tmp_path):
     sb = Sandbox(repo, Path(sys.executable), ["."], tmp_path / "home")
     sb.run_pytest(["tests"], tmp_path / "j.xml")
     assert parse_junit(tmp_path / "j.xml").passed == frozenset({"tests.test_x::test_ok"})
+
+
+def test_revert_test_changes_undoes_test_edits_and_new_test_files_but_keeps_source_edits(sandbox):
+    sandbox.edit_file("pkg/mathy.py", "a - b", "a + b")                                  # the fix: kept
+    sandbox.write_file("tests/test_mathy.py", "def test_add():\n    assert True\n")        # weakened test: undone
+    sandbox.write_file("tests/conftest.py", "# a pytest hook\n")                          # new infrastructure: removed
+    sandbox.write_file("tests/test_new.py", "def test_x():\n    assert False\n")           # new test: removed
+    sandbox.write_file("pytest.ini", "[pytest]\n")                                        # new config: removed
+    sandbox.git_diff()                                                                    # stages it all, as the tool does
+    touched = sandbox.revert_test_changes()
+    assert sorted(touched) == ["pytest.ini", "tests/conftest.py", "tests/test_mathy.py", "tests/test_new.py"]
+    assert "a + b" in sandbox.read_file("pkg/mathy.py")
+    assert "assert add(1, 2) == 3" in sandbox.read_file("tests/test_mathy.py")
+    for gone in ("tests/conftest.py", "tests/test_new.py", "pytest.ini"):
+        assert not (sandbox.root / gone).exists()
+    assert sandbox.revert_test_changes() == []                                            # nothing left to undo
+
+
+def test_revert_test_changes_restores_a_deleted_test_file(sandbox):
+    (sandbox.root / "tests" / "test_mathy.py").unlink()
+    assert sandbox.revert_test_changes() == ["tests/test_mathy.py"]
+    assert (sandbox.root / "tests" / "test_mathy.py").exists()

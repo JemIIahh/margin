@@ -5,9 +5,9 @@ from dataclasses import dataclass
 from typing import Any
 
 from margin.context import GraphError, grep_search
-from margin.sandbox import EditError, PathEscape, Sandbox, SuiteTimeout
+from margin.sandbox import EditError, PathEscape, Sandbox, SuiteTimeout, is_test_path
 from margin.telemetry import record_failure, trace
-from margin.verify import Baseline, NoJunit, SuiteRun, run_suite
+from margin.verify import Baseline, NoJunit, new_failures, run_suite
 
 MAX_OUTPUT_CHARS = 12_000
 
@@ -160,8 +160,9 @@ class ToolExecutor:
             pass
 
     def _guard_write(self, path: str) -> None:
-        if self.sandbox.relpath(path) in self.protected:
-            raise PathEscape(f"{path} is a protected test file; fix the code, not the test")
+        rel = self.sandbox.relpath(path)
+        if rel in self.protected or is_test_path(rel):
+            raise PathEscape(f"{path} is a protected test file or test infrastructure; fix the code, not the tests")
 
     # --- tools -------------------------------------------------------------------
     def _tool_read_file(self, path, start_line=None, end_line=None) -> ToolOutput:
@@ -192,10 +193,6 @@ class ToolExecutor:
     def _tool_git_diff(self) -> ToolOutput:
         return ToolOutput(self.sandbox.git_diff() or "(no changes)")
 
-    def _new_failures(self, run: SuiteRun) -> list[str]:
-        allowed = self.baseline.failing | self.baseline.flaky | set(self.target_junit_ids)
-        return sorted(run.failed - allowed)
-
     def _tool_run_tests(self) -> ToolOutput:
         full = self.arm in ("B", "C")
         args = list(self.test_args) if full else list(self.target_nodeids)
@@ -208,13 +205,15 @@ class ToolExecutor:
         except SuiteTimeout:
             self._recovery("tool_timeout", "tests timed out; retrying with the target tests only")
             run = run_suite(self.sandbox, list(self.target_nodeids), junit)
+            full = False  # a target-only run cannot say anything about the rest of the suite
         if self.faults is not None:
             run = self.faults.corrupt_run(run, protect=set(self.target_junit_ids))
         failing_targets = [t for t in self.target_junit_ids if t not in run.passed]
-        new = self._new_failures(run) if full else []
-        if new:  # suspicious: re-run once and keep only failures that persist
+        new = new_failures(self.baseline, run, self.target_junit_ids) if full else []
+        if new:  # suspicious: re-run once and keep only the regressions that persist
             again = run_suite(self.sandbox, args, junit)
-            persistent = [n for n in new if n in again.failed]
+            still = set(new_failures(self.baseline, again, self.target_junit_ids))
+            persistent = [n for n in new if n in still]
             if len(persistent) != len(new):
                 self._recovery("flaky_rerun", f"{len(new) - len(persistent)} spurious failure(s) cleared on re-run")
             new = persistent

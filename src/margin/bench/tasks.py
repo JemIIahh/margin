@@ -111,7 +111,8 @@ def snapshot_baseline(
     cache = Path(cache_dir) / "baselines" / f"{task.id}.json"
     if use_cache and cache.exists():
         data = json.loads(cache.read_text())
-        return Baseline.from_dict(data["baseline"]), data["seconds"]
+        if "passing" in data["baseline"]:  # one saved before the passing set existed would let skipped tests slip by
+            return Baseline.from_dict(data["baseline"]), data["seconds"]
     started = time.time()
     first = run_suite(sandbox, task.test_args, Path(run_dir) / "baseline-1.xml")
     second = run_suite(sandbox, task.test_args, Path(run_dir) / "baseline-2.xml")

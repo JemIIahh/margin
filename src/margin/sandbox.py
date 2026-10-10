@@ -27,6 +27,25 @@ _GIT_HARDENING = [
 ]
 
 
+# Files pytest or the interpreter executes or reads before any test runs: a patch that touches them can change what
+# "passing" means, so they are as off limits as the tests themselves.
+_TEST_INFRA_NAMES = {
+    "conftest.py", "pytest.ini", ".pytest.ini", "tox.ini", "setup.cfg", "pyproject.toml",
+    "sitecustomize.py", "usercustomize.py", ".coveragerc",
+}
+
+
+def is_test_path(rel: str) -> bool:
+    """True for test files and test infrastructure, by name and by directory. The agent may not write these."""
+    parts = rel.replace("\\", "/").lower().split("/")
+    name = parts[-1]
+    if name in _TEST_INFRA_NAMES or name.endswith(".pth"):
+        return True
+    if name.startswith("test_") or name.endswith("_test.py") or name in ("test.py", "tests.py"):
+        return True
+    return any(part in ("test", "tests", "testing") for part in parts[:-1])
+
+
 class PathEscape(Exception):
     pass
 
@@ -161,6 +180,29 @@ class Sandbox:
     def restore_paths(self, paths: list[str]) -> None:
         if paths:
             self._git("checkout", "HEAD", "--", *paths)
+
+    def revert_test_changes(self) -> list[str]:
+        """Undo every change to test files and test infrastructure, before judging. Returns the paths touched.
+
+        Edits to tests are reverted, files the agent added are deleted, deleted tests come back. Source edits stay.
+        Judging then runs the real tests under the repository's own configuration, whatever the agent wrote.
+        """
+        out = self._git("status", "--porcelain=v1", "-z", "--no-renames", "--untracked-files=all").stdout
+        touched: list[str] = []
+        for entry in out.split("\0"):
+            if not entry:
+                continue
+            code, path = entry[:2], entry[3:]
+            if not is_test_path(path):
+                continue
+            touched.append(path)
+            if code == "??":
+                (self.root / path).unlink(missing_ok=True)
+            elif code[0] == "A":
+                self._git("rm", "-f", "--quiet", "--", path)
+            else:
+                self._git("checkout", "HEAD", "--", path)
+        return sorted(touched)
 
     def exclude(self, patterns: list[str]) -> None:
         path = Path(self._git("rev-parse", "--git-path", "info/exclude").stdout.strip())

@@ -28,13 +28,14 @@ class SuiteRun:
 class Baseline:
     failing: frozenset
     flaky: frozenset
+    passing: frozenset = frozenset()  # passed in both baseline runs; later skipped or missing means it got worse
 
     def to_dict(self) -> dict:
-        return {"failing": sorted(self.failing), "flaky": sorted(self.flaky)}
+        return {"failing": sorted(self.failing), "flaky": sorted(self.flaky), "passing": sorted(self.passing)}
 
     @classmethod
     def from_dict(cls, d: dict) -> Baseline:
-        return cls(frozenset(d["failing"]), frozenset(d["flaky"]))
+        return cls(frozenset(d["failing"]), frozenset(d["flaky"]), frozenset(d.get("passing", [])))
 
 
 @dataclass(frozen=True)
@@ -88,21 +89,35 @@ def run_suite(sandbox: Sandbox, args: list[str], junit_path: Path) -> SuiteRun:
 
 def make_baseline(run1: SuiteRun, run2: SuiteRun) -> Baseline:
     return Baseline(
-        failing=frozenset(run1.failed & run2.failed), flaky=frozenset(run1.failed ^ run2.failed)
+        failing=frozenset(run1.failed & run2.failed),
+        flaky=frozenset(run1.failed ^ run2.failed),
+        passing=frozenset(run1.passed & run2.passed),
     )
+
+
+def new_failures(baseline: Baseline, run: SuiteRun, target_junit_ids: list[str]) -> list[str]:
+    """Tests that got worse: failing now, or passing at the baseline and not passing now.
+
+    The second half matters: a test that was skipped or deleted is neither passed nor failed, so judging only
+    `run.failed` would let a patch hide a regression by silencing the test that exposes it.
+    """
+    targets = set(target_junit_ids)
+    allowed = baseline.failing | baseline.flaky | targets
+    broke = run.failed - allowed
+    vanished = baseline.passing - run.passed - targets
+    return sorted(broke | vanished)
 
 
 def judge(baseline: Baseline, after: SuiteRun, target_junit_ids: list[str]) -> Verdict:
     target_failing = [t for t in target_junit_ids if t not in after.passed]
-    allowed = baseline.failing | baseline.flaky | set(target_junit_ids)
-    new_failures = sorted(after.failed - allowed)
+    worse = new_failures(baseline, after, target_junit_ids)
     if target_failing:
         reason = "target tests still failing: " + ", ".join(target_failing[:5])
-    elif new_failures:
-        reason = "new failures vs baseline: " + ", ".join(new_failures[:5])
+    elif worse:
+        reason = "new failures vs baseline (failed, skipped or missing): " + ", ".join(worse[:5])
     else:
         reason = "solved"
-    return Verdict(not target_failing and not new_failures, target_failing, new_failures, reason)
+    return Verdict(not target_failing and not worse, target_failing, worse, reason)
 
 
 def final_verdict(

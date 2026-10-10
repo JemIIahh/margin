@@ -116,10 +116,13 @@ def execute_run(
         state.log("tampering", error=tampered)
         result = AgentResult("abort", 0, f"sandbox tampering detected: {tampered}")
 
+    tests_touched: list[str] = []
     if tampered:
         verdict = Verdict(False, list(task.target_junit_ids), [], f"sandbox tampering detected: {tampered}")
     else:
-        sandbox.restore_paths(task.test_files)  # undo any edits to protected tests before judging
+        # Judge the repository's own tests under its own configuration: undo every change to test files and test
+        # infrastructure (conftest.py, pytest config, ...) first, so nothing the agent wrote can change what passing means.
+        tests_touched = sandbox.revert_test_changes()
         verdict = final_verdict(sandbox, prep.baseline, task.target_junit_ids, task.test_args, run_dir / "final.xml")
     revenue, margin = settle(price, verdict.solved, meter.total_usd)
     record = RunRecord(
@@ -130,7 +133,7 @@ def execute_run(
         duration_s=round(time.time() - started, 1), fault=settings.fault,
         recoveries=len(state.events("recovery")) + len(state.events("retry")),
         started_at=time.strftime("%Y-%m-%dT%H:%M:%S%z", time.localtime(started)),
-        trace_tags=trace_tags or [], verdict_reason=verdict.reason,
+        trace_tags=trace_tags or [], verdict_reason=verdict.reason, tests_touched=tests_touched,
     )
     ledger.append(record)
     (run_dir / "receipt.md").write_text(render_receipt(record))

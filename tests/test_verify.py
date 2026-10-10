@@ -141,3 +141,24 @@ def test_a_collection_error_in_one_file_does_not_hide_the_other_tests(sandbox, t
     run = run_suite(sandbox, ["tests"], tmp_path / "j.xml")
     assert "tests.test_mathy::test_add" in run.failed        # a real test still ran and was judged
     assert any("test_broken" in i for i in run.failed)       # the unimportable module is reported, not silent
+
+
+def test_make_baseline_records_the_tests_that_passed_in_both_runs():
+    r1 = SuiteRun(frozenset({"a", "b"}), frozenset({"c"}))
+    r2 = SuiteRun(frozenset({"a"}), frozenset({"b", "c"}))      # b flips between runs: flaky, not a baseline pass
+    base = make_baseline(r1, r2)
+    assert base.passing == frozenset({"a"}) and base.flaky == frozenset({"b"})
+    assert Baseline.from_dict(base.to_dict()) == base
+
+
+def test_a_baseline_saved_before_the_passing_set_existed_still_loads():
+    assert Baseline.from_dict({"failing": ["x"], "flaky": []}).passing == frozenset()
+
+
+def test_a_test_that_passed_before_and_is_now_skipped_or_missing_blocks_the_verdict():
+    """Skipping or deleting a passing test must not look like success: it is neither passed nor failed."""
+    base = Baseline(failing=frozenset({"t::target"}), flaky=frozenset(), passing=frozenset({"t::old", "t::other"}))
+    after = SuiteRun(frozenset({"t::target", "t::other"}), frozenset())      # t::old vanished from the results
+    v = judge(base, after, ["t::target"])
+    assert not v.solved and v.new_failures == ["t::old"]
+    assert "new failures" in v.reason

@@ -92,3 +92,33 @@ def test_long_output_is_clipped(sandbox, tmp_path):
     sandbox.write_file("big.txt", "x" * 50_000)
     out = make_executor(sandbox, tmp_path).execute("read_file", {"path": "big.txt"})
     assert len(out.text) < 13_000
+
+
+@pytest.mark.parametrize(
+    "path", ["tests/conftest.py", "tests/test_new.py", "pytest.ini", "tox.ini", "setup.cfg", "pyproject.toml",
+             "sitecustomize.py", "pkg/extra.pth"],
+)
+def test_test_files_and_test_infrastructure_are_read_only(sandbox, tmp_path, path):
+    ex = make_executor(sandbox, tmp_path)
+    out = ex.execute("write_file", {"path": path, "content": "x"})
+    assert out.is_error and "protected" in out.text
+    assert not (sandbox.root / path).exists()
+
+
+def test_run_tests_reports_a_test_that_passed_at_baseline_and_has_gone_missing(sandbox, tmp_path):
+    from margin.verify import Baseline
+
+    ex = make_executor(sandbox, tmp_path)
+    ex.baseline = Baseline(ex.baseline.failing, ex.baseline.flaky, passing=frozenset({"tests.test_mathy::test_ghost"}))
+    out = ex.execute("run_tests", {})
+    assert "FAIL tests.test_mathy::test_ghost" in out.text      # a missing test is a regression, not a pass
+
+
+def test_the_timeout_fallback_does_not_flag_every_untested_test_as_missing(sandbox, tmp_path):
+    from margin.faults import FaultInjector
+    from margin.verify import Baseline
+
+    ex = make_executor(sandbox, tmp_path, faults=FaultInjector("tool_timeout"))
+    ex.baseline = Baseline(ex.baseline.failing, ex.baseline.flaky, passing=frozenset({"tests.test_mathy::test_other"}))
+    out = ex.execute("run_tests", {})                          # falls back to the target tests only
+    assert "test_other" not in out.text and "Target tests: 1 failing of 1" in out.text

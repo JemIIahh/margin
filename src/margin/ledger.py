@@ -29,6 +29,8 @@ class RunRecord:
     started_at: str = ""
     trace_tags: list = field(default_factory=list)
     verdict_reason: str = ""
+    tests_touched: list = field(default_factory=list)  # test paths the agent changed; reverted before judging
+    infra_error: bool = False  # the run failed for harness or infrastructure reasons, not on its merits
 
     def to_dict(self) -> dict:
         return {f.name: getattr(self, f.name) for f in fields(self)}
@@ -72,10 +74,10 @@ class Ledger:
         return out
 
     def latest(self, arm: str) -> dict[str, RunRecord]:
-        """Last benchmark row per task. Fault-injection and demo runs never replace benchmark rows."""
+        """Last benchmark row per task. Fault-injection, demo and infrastructure-failure rows never count."""
         out: dict[str, RunRecord] = {}
         for row in self.rows(arm):
-            if row.fault or any(tag.startswith("version:demo") for tag in row.trace_tags):
+            if row.fault or row.infra_error or any(tag.startswith("version:demo") for tag in row.trace_tags):
                 continue
             out[row.task_id] = row
         return out

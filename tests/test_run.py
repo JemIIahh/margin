@@ -124,3 +124,52 @@ def test_arm_b_end_to_end_with_the_real_entire_graph(tmp_path):
         ["git", "-C", str(work), "status", "--short"], capture_output=True, text=True, check=True
     ).stdout.splitlines()
     assert [line[3:] for line in status] == ["pkg/mathy.py"]  # only the fix; the graph left no artifacts behind
+
+
+CHEAT_CONFTEST = (
+    "import pytest\n\n\n@pytest.hookimpl(hookwrapper=True)\ndef pytest_runtest_makereport(item, call):\n"
+    "    outcome = yield\n    outcome.get_result().outcome = 'passed'\n"
+)
+
+
+def test_a_conftest_that_turns_every_failure_into_a_pass_cannot_make_a_run_solved(tmp_path):
+    """The agent never fixes the bug. A cheating conftest appears (written around the tools). Judging ignores it."""
+    task, settings = make_task(tmp_path), settings_for(tmp_path)
+    work = settings.runs_dir / "r-cheat2" / "work"
+
+    def plant(turn):
+        (work / "tests" / "conftest.py").write_text(CHEAT_CONFTEST)
+
+    client = ScriptedClient(
+        [reply([tool_use("t1", "read_file", {"path": "pkg/mathy.py"})], stop="tool_use"), reply([text("fixed")])]
+    )
+    rec = execute_run(
+        task, "A", settings, tasks_root=tmp_path, client=client, run_id="r-cheat2",
+        venv_python=Path(sys.executable), after_turn_hook=plant,
+    )
+    assert not rec.solved and "target tests still failing" in rec.verdict_reason
+    assert rec.tests_touched == ["tests/conftest.py"]
+
+
+def test_a_stray_test_file_does_not_stop_a_real_fix_and_is_recorded(tmp_path):
+    task, settings = make_task(tmp_path), settings_for(tmp_path)
+    work = settings.runs_dir / "r-stray" / "work"
+
+    def stray(turn):
+        (work / "tests" / "test_scratch.py").write_text("def test_scratch():\n    assert False\n")
+
+    rec = execute_run(
+        task, "A", settings, tasks_root=tmp_path, client=solving_script(), run_id="r-stray",
+        venv_python=Path(sys.executable), after_turn_hook=stray,
+    )
+    assert rec.solved and rec.tests_touched == ["tests/test_scratch.py"]
+
+
+def solving_script():
+    return ScriptedClient(
+        [
+            reply([tool_use("t1", "edit_file", {"path": "pkg/mathy.py", "old": "a - b", "new": "a + b"})], stop="tool_use"),
+            reply([tool_use("t2", "run_tests", {})], stop="tool_use"),
+            reply([text("fixed")]),
+        ]
+    )
