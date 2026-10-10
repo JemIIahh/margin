@@ -1,9 +1,11 @@
 import subprocess
 import sys
+from pathlib import Path
 
 import pytest
 
-from margin.sandbox import EditError, PathEscape, Sandbox, SuiteTimeout
+from conftest import git
+from margin.sandbox import EditError, GitTampered, PathEscape, Sandbox, SuiteTimeout
 
 
 def test_read_file_numbers_lines_and_honours_ranges(sandbox):
@@ -90,3 +92,91 @@ def test_exclude_keeps_artifacts_out_of_the_diff(sandbox):
 def test_sandbox_root_is_resolved(repo, tmp_path):
     sb = Sandbox(repo / ".." / "repo", sys.executable, ["."], tmp_path / "h")
     assert sb.root == repo.resolve()
+
+
+# --- host-side git hardening (security review findings 1 and 2) ----------------------------
+def worktree_sandbox(repo, tmp_path):
+    wt = tmp_path / "wt"
+    git(repo, "worktree", "add", "--detach", "-q", str(wt))
+    return Sandbox(wt, Path(sys.executable), ["."], tmp_path / "wthome")
+
+
+def evil_hook(tmp_path):
+    marker = tmp_path / "PWNED"
+    hook = tmp_path / "hook.sh"
+    hook.write_text(f"#!/bin/sh\ntouch {marker}\nprintf '\\0'\n")
+    hook.chmod(0o755)
+    return marker, hook
+
+
+@pytest.mark.parametrize("bad", [".GIT", ".Git/config", ".git ", "pkg/../.GIT", ".git."])
+def test_git_paths_are_rejected_whatever_their_case(sandbox, bad):
+    with pytest.raises(PathEscape):
+        sandbox.resolve(bad)
+
+
+@pytest.mark.parametrize("name", [".gitattributes", ".gitmodules", "pkg/.gitignore"])
+def test_git_metadata_files_are_read_only_for_the_agent(sandbox, name):
+    with pytest.raises(PathEscape):
+        sandbox.write_file(name, "x")
+    with pytest.raises(PathEscape):
+        sandbox.edit_file(name, "a", "b")
+
+
+def test_a_worktree_git_pointer_cannot_be_rewritten_through_the_file_tools(repo, tmp_path):
+    sb = worktree_sandbox(repo, tmp_path)
+    before = (sb.root / ".git").read_text()
+    with pytest.raises(PathEscape):
+        sb.write_file(".GIT", "gitdir: /tmp/evil\n")
+    assert (sb.root / ".git").read_text() == before
+
+
+def test_a_rewritten_git_pointer_is_detected_and_never_trusted(repo, tmp_path):
+    sb = worktree_sandbox(repo, tmp_path)
+    marker, hook = evil_hook(tmp_path)
+    evil = tmp_path / "evil"
+    evil.mkdir()
+    git(evil, "init", "-q")
+    git(evil, "config", "core.fsmonitor", str(hook))
+    (sb.root / ".git").write_text(f"gitdir: {evil}/.git\n")  # what test code could do, bypassing the tools
+    with pytest.raises(GitTampered):
+        sb.git_diff()
+    assert not marker.exists()
+
+
+def test_config_injected_into_the_shared_git_dir_is_detected(repo, tmp_path):
+    sb = worktree_sandbox(repo, tmp_path)
+    marker, hook = evil_hook(tmp_path)
+    config = sb.common_dir / "config"
+    config.write_text(config.read_text() + f"\n[core]\n\tfsmonitor = {hook}\n")
+    with pytest.raises(GitTampered):
+        sb.git_diff()
+    assert not marker.exists()
+
+
+def test_a_planted_hook_is_detected(repo, tmp_path):
+    sb = worktree_sandbox(repo, tmp_path)
+    marker, _hook = evil_hook(tmp_path)
+    (sb.common_dir / "hooks").mkdir(exist_ok=True)
+    planted = sb.common_dir / "hooks" / "post-checkout"
+    planted.write_text(f"#!/bin/sh\ntouch {marker}\n")
+    planted.chmod(0o755)
+    with pytest.raises(GitTampered):
+        sb.restore_paths(["pkg/mathy.py"])
+    assert not marker.exists()
+
+
+def test_host_git_runs_in_a_scrubbed_environment(sandbox, monkeypatch):
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-secret")
+    env = sandbox._git_env()
+    assert "ANTHROPIC_API_KEY" not in env
+    assert env["GIT_CONFIG_GLOBAL"] == "/dev/null" and env["GIT_CONFIG_NOSYSTEM"] == "1"
+
+
+def test_normal_git_operations_work_in_a_worktree(repo, tmp_path):
+    sb = worktree_sandbox(repo, tmp_path)
+    sb.edit_file("pkg/mathy.py", "a - b", "a + b")
+    assert "+    return a + b" in sb.git_diff()
+    sb.exclude([".entire/"])
+    sb.write_file(".entire/cache", "1")
+    assert ".entire" not in sb.git_diff()

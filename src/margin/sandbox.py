@@ -1,16 +1,30 @@
 """One worktree per run: confined file tools, git helpers and a scrubbed pytest runner.
 
-The agent never gets a shell. File tools resolve every path inside the worktree and refuse .git.
-Subprocess environments are rebuilt from scratch so API keys cannot reach repository code.
+The agent never gets a shell. File tools resolve every path inside the worktree and refuse .git
+(whatever its case, since macOS is case-insensitive). Subprocess environments are rebuilt from
+scratch so API keys cannot reach repository code. Host-side git is hardened: the git directory is
+pinned at construction, git runs in a scrubbed environment with exec-capable config neutralised,
+and a fingerprint of the git config, hooks and `.git` pointer aborts the run if they change.
 Network access is not blocked (vetted tasks need none); evidence docs state this limit.
 """
 from __future__ import annotations
 
+import hashlib
 import os
 import subprocess
 from pathlib import Path
 
 DEFAULT_EXCLUDES = ["__pycache__/", "*.pyc"]
+
+# Config that can make git execute a command. Command-line -c beats every config file.
+_GIT_HARDENING = [
+    "-c", "core.fsmonitor=false",
+    "-c", "core.hooksPath=/dev/null",
+    "-c", "core.attributesFile=/dev/null",
+    "-c", "core.sshCommand=",
+    "-c", "core.pager=cat",
+    "-c", "diff.external=",
+]
 
 
 class PathEscape(Exception):
@@ -22,6 +36,10 @@ class EditError(Exception):
 
 
 class SuiteTimeout(Exception):
+    pass
+
+
+class GitTampered(Exception):
     pass
 
 
@@ -40,9 +58,13 @@ class Sandbox:
         self.home = Path(home)
         self.home.mkdir(parents=True, exist_ok=True)
         self.test_timeout_s = test_timeout_s
+        # Pinned before any agent code can run, so a rewritten `.git` pointer is never followed.
+        self.git_dir = self._ask_git("--absolute-git-dir")
+        self.common_dir = self._ask_git("--git-common-dir")
+        self._fingerprint0 = self._fingerprint()
 
     # --- paths -----------------------------------------------------------------
-    def resolve(self, rel: str) -> Path:
+    def resolve(self, rel: str, *, write: bool = False) -> Path:
         if not isinstance(rel, str) or not rel.strip():
             raise PathEscape("path must be a non-empty string")
         path = (self.root / rel).resolve()
@@ -50,8 +72,13 @@ class Sandbox:
             parts = path.relative_to(self.root).parts
         except ValueError:
             raise PathEscape(f"{rel!r} is outside the repository") from None
-        if ".git" in parts:
+        if any(part.lower().rstrip(". ") == ".git" for part in parts):
             raise PathEscape("the .git directory is off limits")
+        marker = self.root / ".git"
+        if marker.exists() and path.exists() and os.path.samefile(path, marker):
+            raise PathEscape("the .git directory is off limits")
+        if write and any(part.lower().startswith(".git") for part in parts):
+            raise PathEscape("git metadata files (.gitattributes, .gitmodules, ...) are read-only")
         return path
 
     def relpath(self, rel: str) -> str:
@@ -70,14 +97,14 @@ class Sandbox:
         return numbered
 
     def write_file(self, rel: str, content: str) -> None:
-        path = self.resolve(rel)
+        path = self.resolve(rel, write=True)
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(content, encoding="utf-8")
 
     def edit_file(self, rel: str, old: str, new: str) -> None:
         if old == "":
             raise EditError("old must not be empty")
-        path = self.resolve(rel)
+        path = self.resolve(rel, write=True)
         text = path.read_text(encoding="utf-8")
         count = text.count(old)
         if count == 0:
@@ -87,14 +114,49 @@ class Sandbox:
         path.write_text(text.replace(old, new, 1), encoding="utf-8")
 
     # --- git -------------------------------------------------------------------
+    def _git_env(self) -> dict[str, str]:
+        return {
+            "PATH": "/usr/bin:/bin:/usr/local/bin:/opt/homebrew/bin",
+            "HOME": str(self.home),
+            "LANG": "en_US.UTF-8",
+            "GIT_CONFIG_NOSYSTEM": "1",
+            "GIT_CONFIG_GLOBAL": "/dev/null",
+            "GIT_TERMINAL_PROMPT": "0",
+        }
+
+    def _ask_git(self, flag: str) -> Path:
+        out = subprocess.run(
+            ["git", "-C", str(self.root), "rev-parse", flag],
+            env=self._git_env(), check=True, capture_output=True, text=True,
+        ).stdout.strip()
+        path = Path(out)
+        return (path if path.is_absolute() else self.root / path).resolve()
+
+    def _fingerprint(self) -> str:
+        digest = hashlib.sha256()
+        watched = [self.common_dir / "config", self.git_dir / "config.worktree", self.root / ".git"]
+        hooks = self.common_dir / "hooks"
+        if hooks.is_dir():
+            watched += sorted(p for p in hooks.iterdir() if p.is_file() and p.suffix != ".sample")
+        for path in watched:
+            digest.update(str(path).encode())
+            digest.update(path.read_bytes() if path.is_file() else b"\0absent")
+        return digest.hexdigest()
+
+    def assert_git_intact(self) -> None:
+        if self._fingerprint() != self._fingerprint0:
+            raise GitTampered("git config, hooks or the .git pointer changed while the agent ran")
+
     def _git(self, *args: str) -> subprocess.CompletedProcess:
+        self.assert_git_intact()
         return subprocess.run(
-            ["git", "-C", str(self.root), *args], check=True, capture_output=True, text=True
+            ["git", "--git-dir", str(self.git_dir), "--work-tree", str(self.root), *_GIT_HARDENING, *args],
+            cwd=self.root, env=self._git_env(), check=True, capture_output=True, text=True,
         )
 
     def git_diff(self) -> str:
         self._git("add", "-A")
-        return self._git("diff", "--cached", "--no-color").stdout
+        return self._git("diff", "--cached", "--no-color", "--no-ext-diff", "--no-textconv").stdout
 
     def restore_paths(self, paths: list[str]) -> None:
         if paths:
