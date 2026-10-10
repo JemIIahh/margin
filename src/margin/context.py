@@ -13,7 +13,7 @@ class GraphError(RuntimeError):
     pass
 
 
-def _is_source(path: Path, root: Path) -> bool:
+def is_source(path: Path, root: Path) -> bool:
     rel = path.relative_to(root)
     for part in rel.parts[:-1]:
         if part.startswith(".") or part in SKIP_DIRS or part.endswith(".egg-info"):
@@ -42,7 +42,7 @@ def grep_search(root: Path, query: str, max_hits: int = 40) -> str:
 def naive_context(root: Path, max_chars: int) -> str:
     """Arm A: stuff whole source files into the prompt, smallest first, up to a character budget."""
     root = Path(root)
-    files = [p for p in root.rglob("*.py") if _is_source(p, root)]
+    files = [p for p in root.rglob("*.py") if is_source(p, root)]
     files.sort(key=lambda p: (p.stat().st_size, str(p)))
     chosen: list[tuple[str, str]] = []
     used = 0
