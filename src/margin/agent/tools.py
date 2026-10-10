@@ -108,6 +108,27 @@ def _clip(out: ToolOutput) -> ToolOutput:
     return ToolOutput(out.text[:MAX_OUTPUT_CHARS] + "\n[output truncated]", out.is_error)
 
 
+def _check_args(name: str, args: dict) -> str | None:
+    """Validate a tool call against its own schema, so the model gets a clear message, not a Python TypeError."""
+    props, required = SCHEMAS[name]["input_schema"]["properties"], SCHEMAS[name]["input_schema"]["required"]
+    problems = []
+    unexpected = sorted(set(args) - set(props))
+    if unexpected:
+        problems.append("unexpected " + ", ".join(unexpected))
+    missing = [k for k in required if k not in args]
+    if missing:
+        problems.append("missing " + ", ".join(missing))
+    for key, value in args.items():
+        kind = props.get(key, {}).get("type")
+        if kind == "string" and not isinstance(value, str):
+            problems.append(f"{key} must be a string")
+        elif kind == "integer" and (not isinstance(value, int) or isinstance(value, bool)):
+            problems.append(f"{key} must be an integer")
+    if not problems:
+        return None
+    return f"error: invalid arguments for {name}: {'; '.join(problems)}. It takes: {', '.join(props) or 'no arguments'}"
+
+
 class ToolExecutor:
     def __init__(
         self,
@@ -149,15 +170,23 @@ class ToolExecutor:
                 return ToolOutput(f"error: unknown tool {name!r}", True)
             if not isinstance(args, dict):
                 return ToolOutput("error: tool input must be a JSON object", True)
+            if (problem := _check_args(name, args)) is not None:
+                return ToolOutput(problem, True)
             try:
                 return _clip(handler(**args))
             except (
                 PathEscape, EditError, GraphError, SuiteTimeout, NoJunit,
                 KeyError, TypeError, ValueError, OSError,
             ) as exc:
-                return ToolOutput(f"error: {type(exc).__name__}: {exc}", True)
+                return ToolOutput(self._scrub(f"error: {type(exc).__name__}: {exc}"), True)
             except subprocess.CalledProcessError as exc:  # a git command failed inside a tool: the agent can see it
-                return ToolOutput(f"error: {' '.join(map(str, exc.cmd[:3]))} failed: {(exc.stderr or '')[:300]}", True)
+                return ToolOutput(
+                    self._scrub(f"error: {' '.join(map(str, exc.cmd[:3]))} failed: {(exc.stderr or '')[:300]}"), True
+                )
+
+    def _scrub(self, text: str) -> str:
+        """Show repository-relative paths only: the absolute worktree path names the user's home directory."""
+        return text.replace(str(self.sandbox.root), ".")
 
     def digest(self) -> dict:
         return {"diff": self.sandbox.git_diff()[:20_000], "tests": self.last_tests_text or "(tests not run yet)"}

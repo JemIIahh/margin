@@ -175,3 +175,25 @@ def test_a_case_variant_of_a_protected_file_is_refused_and_leaves_it_unchanged(s
     out = ex.execute("edit_file", {"path": "tests/TEST_MATHY.py", "old": "== 3", "new": "== -1"})
     assert out.is_error and "protected" in out.text
     assert (sandbox.root / "tests" / "test_mathy.py").read_text() == before
+
+
+def test_a_tool_error_never_shows_the_absolute_worktree_path(sandbox, tmp_path):
+    """Seen live: reading a directory returned IsADirectoryError with '/Users/<name>/.../work/...' in the model's context."""
+    out = make_executor(sandbox, tmp_path).execute("read_file", {"path": "pkg"})
+    assert out.is_error and str(sandbox.root) not in out.text
+    assert "directory" in out.text.lower() and "pkg" in out.text
+
+
+def test_wrong_arguments_get_a_clear_message_without_python_internals(sandbox, tmp_path):
+    """Seen live: the model sent an extra argument to edit_file and read 'ToolExecutor._tool_edit_file() got an unexpected keyword'."""
+    ex = make_executor(sandbox, tmp_path)
+    extra = ex.execute("edit_file", {"path": "pkg/mathy.py", "old": "a", "new": "b", "replace_all": True})
+    assert extra.is_error and "unexpected" in extra.text and "replace_all" in extra.text
+    assert "ToolExecutor" not in extra.text and "_tool_" not in extra.text
+    assert "path, old, new" in extra.text                          # it says what the tool does take
+    missing = ex.execute("edit_file", {"path": "pkg/mathy.py"})
+    assert missing.is_error and "missing" in missing.text and "old" in missing.text and "new" in missing.text
+    wrong = ex.execute("read_file", {"path": "pkg/mathy.py", "start_line": "a"})
+    assert wrong.is_error and "start_line" in wrong.text and "integer" in wrong.text
+    bool_as_int = ex.execute("read_file", {"path": "pkg/mathy.py", "start_line": True})
+    assert bool_as_int.is_error                                     # True is an int in Python, not a line number
