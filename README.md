@@ -4,7 +4,7 @@ An issue-fixing agent that knows what it costs: it **quotes** a price band befor
 
 You give it a repository, a commit and an issue. It quotes a cost band learned from its own past runs, fixes the issue with a hard spending cap, and the result is judged by the repository's tests: it counts only if the target tests pass and nothing that passed before now fails. Revenue is the quoted price if the fix is verified and zero otherwise, so a failed run is a visible loss, which is why the governor matters.
 
-Built for neatHack. **Status:** the pipeline is implemented and tested offline; the benchmark runs that produce the published numbers have not been generated yet. See [`hackathon.md`](hackathon.md) for the build log and [`docs/superpowers/specs/2026-10-10-margin-design.md`](docs/superpowers/specs/2026-10-10-margin-design.md) for the design.
+Built for neatHack. **Status:** implemented, tested (283 tests) and benchmarked on 16 real GitHub issues (4 calibration, 12 evaluation, one run per task per arm, model `claude-haiku` through the event's LiteLLM proxy). Headline, from [`docs/results.md`](docs/results.md): entire-graph context cut the cost of a solved fix from $0.26 (arm A) to $0.11 (arm B) and $0.13 (arm C); the quote and governor did **not** beat plain graph context in this sample (9 against 11 of 12 solved), and `docs/notes/arm-c-evaluation.md` says where and why. See [`hackathon.md`](hackathon.md) for the build log and [`docs/superpowers/specs/2026-10-10-margin-design.md`](docs/superpowers/specs/2026-10-10-margin-design.md) for the design.
 
 Uses [neatlogs](https://neatlogs.com) (traces), [Entire](https://entire.io) (checkpoints and entire-graph) and [cfo.ai](https://cfo.ai) (business plan).
 
@@ -16,7 +16,7 @@ cp .env.example .env                     # only if you have no .env yet; then fi
 entire enable --agent claude-code        # record build sessions as Entire checkpoints
 ```
 
-`.env` needs `ANTHROPIC_API_KEY` and `NEATLOGS_API_KEY` (the neatlogs **project** key from Settings, API keys; not the `nlw_` ingest key). Never commit it. Without a neatlogs key every trace call is a no-op, so tests and dry runs need no network.
+`.env` needs `NEATLOGS_API_KEY` (the neatlogs **project** key from Settings, API keys; not the `nlw_` ingest key) and one model provider: either `ANTHROPIC_API_KEY` (the default), or `MARGIN_PROVIDER=litellm` with `LITELLM_API_KEY` and `LITELLM_BASE_URL` (an OpenAI-compatible proxy), with `MARGIN_MAIN_MODEL` and `MARGIN_FALLBACK_MODEL` set to names that provider serves. Never commit `.env`. Without a neatlogs key every trace call is a no-op, so tests and offline runs need no key. A benchmark batch stops when the whole ledger's spend reaches `MARGIN_BENCH_BUDGET_USD`.
 
 ## Run
 
@@ -37,7 +37,7 @@ make verify          # runs the tests, then regenerates docs/results.md from the
 
 ## Where things are
 
-- [`EVIDENCE.md`](EVIDENCE.md): every claim, linked to something you can open (in progress)
+- [`EVIDENCE.md`](EVIDENCE.md): every claim, linked to something you can open 
 - [`docs/results.md`](docs/results.md) and [`docs/receipts.html`](docs/receipts.html): generated from `docs/evidence/ledger.jsonl`
 - [`docs/business/`](docs/business/): the cfo.ai plan and the measured numbers it was built from
 - [`docs/notes/task-curation.md`](docs/notes/task-curation.md): how the 16 benchmark tasks were chosen
