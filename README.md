@@ -35,6 +35,27 @@ Arms: **A** naive (whole-file context, flat price, no governor), **B** A plus en
 make verify          # runs the tests, then regenerates docs/results.md from the stored ledger and fails if it differs
 ```
 
+## Try it without any keys (about 5 minutes)
+
+Checked on a fresh clone of this repository with no `.env`:
+
+```bash
+git clone https://github.com/JemIIahh/margin.git && cd margin
+uv sync
+make verify                                 # 300+ tests, offline; regenerates docs/results.md from the stored ledger and checks it
+uv run margin quote --task tabulate-241     # free, no model call: the price band, learned from the published ledger
+open docs/receipts.html                     # one card per recorded run, verified and not verified
+```
+
+`margin quote` prints `cost band $0.0668 - $0.4451 (p50 $0.1724) from 15 past runs; price $0.6677` for that task. It needs `git`, `uv`, network
+access (it clones the open-source project) and the [Entire CLI](https://docs.entire.io) for the graph step; without Entire the tests that need
+it are skipped rather than failed. To run the agent on a task yourself costs real money (our runs cost $0.03 to $0.39 each with a cheap model):
+set a provider as in **Setup**, then `uv run margin run --task cachetools-423 --arm C`.
+
+What this is not: there is no hosted service, web app, API or MCP server. Margin is a command-line tool and a set of recorded results, and it
+works on tasks described in `bench/tasks.toml` (a repository, a base commit, and the tests that must go from failing to passing); a new task is a
+new entry in that file.
+
 ## Where things are
 
 - [`EVIDENCE.md`](EVIDENCE.md): every claim, linked to something you can open 
