@@ -132,3 +132,12 @@ def test_timeout_and_missing_results_are_failed_verdicts(sandbox, tmp_path):
     assert not v.solved and "timed out" in v.reason
     v2 = final_verdict(sandbox, base, ["t::x"], ["no/such/dir"], tmp_path / "m.xml")
     assert not v2.solved and v2.reason
+
+
+def test_a_collection_error_in_one_file_does_not_hide_the_other_tests(sandbox, tmp_path):
+    """A module that cannot even be imported (say, it needs a git submodule a worktree lacks) must show up as
+    one failed entry, not blank out the whole suite: the agent needs to see which tests broke and which did not."""
+    sandbox.write_file("tests/test_broken.py", "def broken(:\n")
+    run = run_suite(sandbox, ["tests"], tmp_path / "j.xml")
+    assert "tests.test_mathy::test_add" in run.failed        # a real test still ran and was judged
+    assert any("test_broken" in i for i in run.failed)       # the unimportable module is reported, not silent

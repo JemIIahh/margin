@@ -191,9 +191,11 @@ class Sandbox:
         limit = timeout_s or self.test_timeout_s
         # --rootdir pins test ids to the repo. Without it pytest walks up to the nearest config file, which for a
         # repo with none is the host project's, and every junit classname gets the worktree path prefixed.
+        # --continue-on-collection-errors: by default one unimportable test module aborts the whole run and
+        # blanks every other result. Report it as one failed entry and judge the rest.
         cmd = [
             str(self.venv_python), "-m", "pytest", "-q", "-p", "no:cacheprovider",
-            f"--rootdir={self.root}", f"--junitxml={junit_path}", *args,
+            f"--rootdir={self.root}", "--continue-on-collection-errors", f"--junitxml={junit_path}", *args,
         ]
         try:
             return subprocess.run(
