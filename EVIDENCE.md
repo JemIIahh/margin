@@ -23,7 +23,7 @@ run `make verify` to regenerate `docs/results.md` from it and fail if it differs
 - entire-graph at runtime for search and impact (arms B and C). Its report over the build sessions is in [`docs/evidence/graph-stats.txt`](docs/evidence/graph-stats.txt); note that it covers the *build* sessions, which barely used the graph, so it shows about zero savings. The effect of graph context on Margin's agent is measured as tokens per solved fix, arm A versus arm B, in `docs/results.md`.
 
 ## You used cfo.ai
-- Business plan covering pricing, costs, revenue and runway: [`docs/business/`](docs/business/) ({{CFO_PLAN_FILE}}).
+- Business plan covering pricing, costs, revenue and runway: [`docs/business/`](docs/business/) (exports: [`cfo-pricing.xlsx`](docs/business/cfo-pricing.xlsx), [`cfo-revenue-and-margin.xlsx`](docs/business/cfo-revenue-and-margin.xlsx), [`cfo-cash-and-runway.xlsx`](docs/business/cfo-cash-and-runway.xlsx), [`cfo-scenarios.xlsx`](docs/business/cfo-scenarios.xlsx); summary in [`README.md`](docs/business/README.md)).
 - Measured inputs it was built from: [`docs/business/inputs.md`](docs/business/inputs.md).
 
 ## The agent recovers from failures
