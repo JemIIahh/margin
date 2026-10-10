@@ -22,6 +22,19 @@ read back from neatlogs through its authenticated MCP endpoint (`get_trace_conte
 | A failing span | **First run: SUCCESS.** `neatlogs.trace` is a bare try/finally (read in the installed SDK) and never records an exception. **Fixed** in `telemetry.trace` (record the exception, set error status, set `error` and `error.message`). Re-run: that span is `ERROR`, the trace has `has_error: true` and `error_count: 1` |
 | Trace status when a failure was recovered from | The trace status becomes `error` even if the run then succeeded. Expected, and useful: a recovery shows as a failed span followed by a recovery span |
 
+## A benchmark run read back (2026-10-10, arm B, `sqlparse-772`, version v2-graph)
+- Stored with 91 spans: 30 model calls and 30 tool calls under the `margin.run` root, no errored spans. Prompt 627,869 plus
+  completion 18,045 tokens is 645,914, the same total as the ledger row for that run, so no span or token was lost.
+- `total_cost` is `0` for those 645,914 tokens: the proxy's `claude-haiku` is not a model name neatlogs prices (the earlier
+  hello-trace finding, now seen on a real run). The cost shown in the dashboard is therefore not the cost of the run; the ledger,
+  the receipts and each turn's `margin.cost_usd` are.
+- The trace status is `success` although the fix was not verified: the span tree records whether the code raised, and an unsolved
+  run is a normal result. `solved` is in the root span's output.
+- The four run tags (`arm:B`, `task:sqlparse-772`, `split:calibration`, `version:v2-graph`) appear in the read-back only inside the
+  root span's input and output text (they are fields of the run record). The read-back returns no span attributes and no trace
+  tags (span fields: id, name, type, status, duration, parent, input, output), so whether they are real, filterable tags is
+  still a dashboard question. The selective read (`span_names`) is disabled by neatlogs ("not_enabled").
+
 ## Not verified from the API (needs a look at the dashboard)
 - Whether the custom `margin.*` attributes (for example `margin.spend_usd`, `margin.cost_usd`, `margin.rung`) appear on the spans:
   `get_trace_context` only returns status, model, token counts, tool name and input/output.
