@@ -36,4 +36,4 @@ class FaultInjector:
             return run
         self._flaky_pending = False
         victim = candidates[0]
-        return SuiteRun(run.passed - {victim}, run.failed | {victim})
+        return SuiteRun(run.passed - {victim}, run.failed | {victim}, run.messages)

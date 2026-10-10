@@ -40,6 +40,13 @@ def test_read_edit_and_run_tests_flow(sandbox, tmp_path):
     assert ex.progress.events >= 2  # first edit + target failures dropped
 
 
+def test_run_tests_shows_why_a_target_test_fails_without_the_worktree_path(sandbox, tmp_path):
+    out = make_executor(sandbox, tmp_path).execute("run_tests", {})
+    assert "FAIL tests.test_mathy::test_add" in out.text
+    assert "assert -1 == 3" in out.text
+    assert str(sandbox.root) not in out.text
+
+
 def test_arm_a_runs_only_the_target_tests(sandbox, tmp_path):
     ex = make_executor(sandbox, tmp_path, arm="A")
     out = ex.execute("run_tests", {})

@@ -11,6 +11,8 @@ from margin.telemetry import record_failure, trace
 from margin.verify import Baseline, NoJunit, new_failures, run_suite
 
 MAX_OUTPUT_CHARS = 12_000
+MAX_WHY = 3      # failing targets whose assertion message is shown
+WHY_LINES = 8    # lines kept per message
 
 
 @dataclass(frozen=True)
@@ -259,7 +261,10 @@ class ToolExecutor:
             new = persistent
         self.progress.note_tests(len(failing_targets))
         lines = [f"Target tests: {len(failing_targets)} failing of {len(self.target_junit_ids)}"]
-        lines += [f"  FAIL {t}" for t in failing_targets]
+        for shown, test_id in enumerate(failing_targets):
+            lines.append(f"  FAIL {test_id}")
+            if shown < MAX_WHY and (why := run.messages.get(test_id)):  # the model cannot run code: show it why
+                lines += [f"      {ln}" for ln in self._scrub(why).splitlines()[:WHY_LINES]]
         if full:
             lines.append("New failures vs baseline: " + ("none" if not new else ""))
             lines += [f"  FAIL {t}" for t in new[:20]]

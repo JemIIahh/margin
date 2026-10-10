@@ -30,6 +30,23 @@ def test_parse_junit_splits_passed_failed_and_ignores_skipped(tmp_path):
     assert run.failed == frozenset({"tests.test_a::test_bad", "tests.test_a::test_err"})
 
 
+def test_parse_junit_keeps_a_bounded_failure_message_for_each_failed_test(tmp_path):
+    p = tmp_path / "j.xml"
+    long = "assert 'SELECT 1AS foo' == 'SELECT 1 AS foo'\n" + "  - noise\n" * 400
+    p.write_text(
+        '<testsuites><testsuite>'
+        '<testcase classname="t.test_a" name="test_ok"/>'
+        f'<testcase classname="t.test_a" name="test_bad"><failure message="{long}">trace</failure></testcase>'
+        '<testcase classname="t.test_a" name="test_err"><error message="ImportError: no module x">trace</error></testcase>'
+        '</testsuite></testsuites>'
+    )
+    run = parse_junit(p)
+    assert set(run.messages) == {"t.test_a::test_bad", "t.test_a::test_err"}
+    assert run.messages["t.test_a::test_bad"].startswith("assert 'SELECT 1AS foo' == 'SELECT 1 AS foo'")
+    assert len(run.messages["t.test_a::test_bad"]) <= 600
+    assert run.messages["t.test_a::test_err"] == "ImportError: no module x"
+
+
 def test_parse_junit_rejects_missing_and_garbage(tmp_path):
     with pytest.raises(NoJunit):
         parse_junit(tmp_path / "missing.xml")

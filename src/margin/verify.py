@@ -5,7 +5,7 @@ A fix counts only if every target test passes and no test that was passing at th
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 # JUnit files are written by third-party test code, so parse them with entity expansion disabled.
@@ -18,10 +18,14 @@ class NoJunit(Exception):
     pass
 
 
+MESSAGE_CHARS = 600  # enough for pytest's assertion rewrite (expected vs got), small enough to repeat every run
+
+
 @dataclass(frozen=True)
 class SuiteRun:
     passed: frozenset
     failed: frozenset
+    messages: dict = field(default_factory=dict, compare=False)  # failed test id -> why, bounded
 
 
 @dataclass(frozen=True)
@@ -65,13 +69,16 @@ def parse_junit(path: Path) -> SuiteRun:
         raise NoJunit(f"unreadable junit xml: {exc}") from exc
     passed: set[str] = set()
     failed: set[str] = set()
+    messages: dict[str, str] = {}
     for case in root.iter("testcase"):
         test_id = f"{case.get('classname', '')}::{case.get('name', '')}"
-        if case.find("failure") is not None or case.find("error") is not None:
+        problem = case.find("failure") if case.find("failure") is not None else case.find("error")
+        if problem is not None:
             failed.add(test_id)
+            messages[test_id] = (problem.get("message") or "").strip()[:MESSAGE_CHARS]
         elif case.find("skipped") is None:
             passed.add(test_id)
-    return SuiteRun(frozenset(passed), frozenset(failed))
+    return SuiteRun(frozenset(passed), frozenset(failed), messages)
 
 
 def run_suite(sandbox: Sandbox, args: list[str], junit_path: Path) -> SuiteRun:
