@@ -28,7 +28,7 @@ run `make verify` to regenerate `docs/results.md` from it and fail if it differs
 
 ## The agent recovers from failures
 - Injected overload, test timeout and flaky test, each followed by recovery: [`docs/evidence/failure-recovery.md`](docs/evidence/failure-recovery.md).
-- A run killed mid-flight and resumed from its checkpoint: {{RESUME_TRACE_URL}}.
+- A run killed mid-flight and resumed from its checkpoint: [screenshot of the resumed trace](docs/evidence/trace-resume.jpg) (`tomlkit-619`, run `demo-resume-184535`). The run was killed with `kill -9` after its second model call; the trace starts at `turn-2` because turns 0 and 1 ran in the process that was killed, and it carries a fifth tag, `resumed:true`. The ledger cost covers all 30 model calls, before and after the kill ([`docs/evidence/failure-recovery.md`](docs/evidence/failure-recovery.md)).
 - Offline tests of each recovery path, and of resume, are in `tests/test_faults.py` and `tests/test_resume.py`.
 
 ## You built in public
