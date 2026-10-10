@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import math
 import statistics
-from collections.abc import Iterable
+from collections.abc import Collection, Iterable
 from dataclasses import replace
 from html import escape
 
@@ -11,7 +11,16 @@ from margin.ledger import Ledger, RunRecord, settle
 from margin.quote import Features, evaluate_loo
 
 
-def calibrate_flat_price(rows_a: dict[str, RunRecord], markup: float) -> dict:
+def calibrate_flat_price(
+    rows_a: dict[str, RunRecord], markup: float, calibration_ids: Collection[str] | None = None
+) -> dict:
+    """Mean arm A cost over the calibration tasks, plus markup. With `calibration_ids` (the manifest's calibration
+    tasks) a stray run (a smoke test) cannot move the price, and a calibration task nobody ran is an error."""
+    if calibration_ids is not None:
+        missing = sorted(set(calibration_ids) - set(rows_a))
+        if missing:
+            raise ValueError("no arm A run for calibration task(s): " + ", ".join(missing))
+        rows_a = {task_id: row for task_id, row in rows_a.items() if task_id in calibration_ids}
     calibration = [r for r in rows_a.values() if r.split == "calibration"]
     if not calibration:
         raise ValueError("no arm A calibration runs in the ledger")

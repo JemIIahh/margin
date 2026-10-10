@@ -37,6 +37,21 @@ def test_calibrate_flat_price_uses_only_calibration_runs():
     assert result["n"] == 2
 
 
+def test_calibrate_flat_price_ignores_a_run_that_is_not_a_manifest_calibration_task():
+    rows = {"a": rec(task="a", cost=1.0), "b": rec(task="b", cost=3.0), "smoke-add": rec(task="smoke-add", cost=0.01)}
+    for row in rows.values():
+        row.split = "calibration"
+    result = calibrate_flat_price(rows, markup=0.5, calibration_ids={"a", "b"})
+    assert (result["n"], result["mean_cost_usd"], result["flat_price_usd"]) == (2, pytest.approx(2.0), pytest.approx(3.0))
+
+
+def test_calibrate_flat_price_refuses_when_a_manifest_calibration_task_has_no_run():
+    rows = {"a": rec(task="a", cost=1.0)}
+    rows["a"].split = "calibration"
+    with pytest.raises(ValueError, match="no arm A run for calibration task.*b"):
+        calibrate_flat_price(rows, markup=0.5, calibration_ids={"a", "b"})
+
+
 def test_calibrate_flat_price_requires_calibration_runs():
     with pytest.raises(ValueError, match="no arm A calibration"):
         calibrate_flat_price({"c": rec(task="c")}, markup=0.5)

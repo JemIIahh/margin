@@ -9,6 +9,18 @@ from test_ledger import rec
 FLAT = {"flat_price_usd": 3.0, "mean_cost_usd": 2.0, "n": 2, "markup": 0.5}
 
 
+def write_manifest(tmp_path) -> str:
+    """The task manifest the report checks the ledger against: two calibration and two evaluation tasks."""
+    entry = (
+        '[[task]]\nid = "{id}"\nsplit = "{split}"\nrepo = "r"\nbase_commit = "b"\nfix_commit = "f"\n'
+        'issue_url = "u"\nissue_file = "i"\ntarget_tests = []\ntest_files = []\n'
+    )
+    path = tmp_path / "tasks.toml"
+    path.write_text("".join(entry.format(id=i, split=sp) for i, sp in
+                            [("cal1", "calibration"), ("cal2", "calibration"), ("e1", "evaluation"), ("e2", "evaluation")]))
+    return str(path)
+
+
 def feat(i):
     return Features(i, 3, 1000, 2.0).to_dict()
 
@@ -54,7 +66,8 @@ def test_report_command_writes_then_checks(tmp_path):
     flat = tmp_path / "flat.json"
     flat.write_text(json.dumps(FLAT))
     out, html = tmp_path / "results.md", tmp_path / "receipts.html"
-    base = ["report", "--ledger", str(ledger.path), "--flat", str(flat), "--out", str(out), "--html", str(html)]
+    base = ["report", "--ledger", str(ledger.path), "--flat", str(flat), "--out", str(out), "--html", str(html),
+            "--tasks-file", write_manifest(tmp_path)]
     assert main(base) == 0
     assert out.exists() and html.exists()
     assert main([*base, "--check"]) == 0
@@ -84,6 +97,6 @@ def test_report_refuses_a_flat_price_the_ledger_does_not_support(tmp_path, capsy
     flat = tmp_path / "flat.json"
     flat.write_text(json.dumps({**FLAT, "flat_price_usd": 9.99}))
     args = ["report", "--ledger", str(ledger.path), "--flat", str(flat),
-            "--out", str(tmp_path / "r.md"), "--html", str(tmp_path / "r.html")]
+            "--out", str(tmp_path / "r.md"), "--html", str(tmp_path / "r.html"), "--tasks-file", write_manifest(tmp_path)]
     assert main(args) == 1 and "calibrate-flat" in capsys.readouterr().out
     assert main([*args, "--check"]) == 1

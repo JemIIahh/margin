@@ -72,6 +72,12 @@ def cmd_bench(args: argparse.Namespace) -> int:
     return 0
 
 
+def _calibration_ids(settings: Settings, tasks_file: str | None = None) -> set[str]:
+    from margin.bench.tasks import load_tasks
+
+    return {t.id for t in load_tasks(Path(tasks_file or settings.root / "bench" / "tasks.toml")) if t.split == "calibration"}
+
+
 def cmd_calibrate_flat(args: argparse.Namespace) -> int:
     import json
 
@@ -79,7 +85,13 @@ def cmd_calibrate_flat(args: argparse.Namespace) -> int:
     from margin.ledger import Ledger
 
     settings = Settings.from_env()
-    result = calibrate_flat_price(Ledger(settings.ledger_path).latest("A"), settings.target_markup)
+    try:
+        result = calibrate_flat_price(
+            Ledger(settings.ledger_path).latest("A"), settings.target_markup, _calibration_ids(settings)
+        )
+    except ValueError as exc:
+        print(f"cannot calibrate the flat price: {exc}")
+        return 1
     path = settings.root / "bench" / "flat_price.json"
     path.write_text(json.dumps(result, indent=2) + "\n")
     print(f"flat price ${result['flat_price_usd']:.4f} from {result['n']} calibration runs -> {path}")
@@ -153,7 +165,9 @@ def cmd_report(args: argparse.Namespace) -> int:
     from margin.bench.report import calibrate_flat_price
 
     try:
-        derived = calibrate_flat_price(ledger.latest("A"), flat.get("markup", settings.target_markup))
+        derived = calibrate_flat_price(
+            ledger.latest("A"), flat.get("markup", settings.target_markup), _calibration_ids(settings, args.tasks_file)
+        )
     except ValueError as exc:
         print(f"cannot check the flat price against {ledger.path}: {exc}")
         return 1
@@ -259,6 +273,7 @@ def build_parser() -> argparse.ArgumentParser:
     report.add_argument("--flat", default=None)
     report.add_argument("--out", default=None)
     report.add_argument("--html", default=None)
+    report.add_argument("--tasks-file", default=None, help="manifest naming the calibration tasks (default bench/tasks.toml)")
     report.add_argument("--check", action="store_true", help="fail if the results file is out of date")
     report.set_defaults(func=cmd_report)
 
