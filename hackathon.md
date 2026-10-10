@@ -55,6 +55,7 @@ Solo. Registered team name: Sofer.
 - Injected a flaky test, a test timeout and an API overload into live runs and killed and resumed another; all four ended verified (`docs/evidence/failure-recovery.md`). The neatlogs read-back was returning 502 at the time, so those traces were not checked in the dashboard.
 - Checked in the neatlogs dashboard: the four run tags and the span tree render; the proxy model is shown at $0 because neatlogs does not price it; the custom span attributes were not checked.
 - Generated the results page, the receipts page (checked at 390px) and the business-plan inputs from the stored ledger. Spend so far: $7.32 of the event's $20 allowance.
+- Entire Brain: seven durable facts written by hand with explicit categories (`entire brain remember --agent none --path ...`), so nothing was extracted from sessions and no model was called; they sit outside the repository, and `entire brain facts status` reports `authored=7 distilled=0`. Automatic extraction was left off because it would send session text, which holds the home path and old emails, to a model provider.
 
 ## Demo
 
