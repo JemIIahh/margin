@@ -49,9 +49,12 @@ def cmd_tasks_validate(args: argparse.Namespace) -> int:
 
 
 def cmd_bench(args: argparse.Namespace) -> int:
-    from margin.bench.runner import BudgetExceeded, run_batch
+    from margin.bench.runner import BudgetExceeded, InfrastructureFailure, run_batch
 
     settings = Settings.from_env()
+    if settings.fault:
+        print(f"MARGIN_FAULT={settings.fault} is set; refusing to run a benchmark with injected faults (unset it)")
+        return 2
     tasks = load_tasks(_tasks_path(args, settings))
     chosen = [t for t in tasks if args.split == "all" or t.split == args.split]
     try:
@@ -62,6 +65,9 @@ def cmd_bench(args: argparse.Namespace) -> int:
     except BudgetExceeded as exc:
         print(f"stopped: {exc}")
         return 2
+    except InfrastructureFailure as exc:
+        print(f"stopped: {exc}")
+        return 3
     print(f"{len(ids)} runs recorded in {settings.ledger_path}")
     return 0
 
@@ -144,6 +150,19 @@ def cmd_report(args: argparse.Namespace) -> int:
         print(f"{flat_path} is missing; run `uv run margin calibrate-flat` after the arm A calibration runs")
         return 1
     flat = json.loads(flat_path.read_text())
+    from margin.bench.report import calibrate_flat_price
+
+    try:
+        derived = calibrate_flat_price(ledger.latest("A"), flat.get("markup", settings.target_markup))
+    except ValueError as exc:
+        print(f"cannot check the flat price against {ledger.path}: {exc}")
+        return 1
+    if abs(derived["flat_price_usd"] - flat["flat_price_usd"]) > 1e-4:
+        print(
+            f"{flat_path} says ${flat['flat_price_usd']:.4f} but the ledger's arm A calibration runs give "
+            f"${derived['flat_price_usd']:.4f}; run `uv run margin calibrate-flat` (after `snapshot-ledger`)"
+        )
+        return 1
     out = Path(args.out or settings.root / "docs" / "results.md")
     text = render_results(ledger, flat)
     if args.check:

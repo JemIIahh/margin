@@ -15,6 +15,13 @@ class BudgetExceeded(RuntimeError):
     pass
 
 
+class InfrastructureFailure(RuntimeError):
+    """Consecutive runs failed for harness or API reasons, so more runs would only repeat the failure."""
+
+
+INFRA_FAILURES_BEFORE_STOP = 2
+
+
 def run_batch(
     tasks: list[Task],
     arm: str,
@@ -28,8 +35,10 @@ def run_batch(
 ) -> list[str]:
     ledger = Ledger(settings.ledger_path)
     spent = sum(r.cost_usd for r in ledger.rows())
-    done = {r.task_id for r in ledger.rows(arm)} if only_missing else set()
+    # "done" means a real benchmark row: infrastructure failures, fault runs and demo runs do not count
+    done = set(ledger.latest(arm)) if only_missing else set()
     run_ids: list[str] = []
+    infra_streak = 0
     for task in tasks:
         if task.id in done:
             continue
@@ -41,11 +50,27 @@ def run_batch(
         cmd = [python, "-m", "margin", "run", "--task", task.id, "--arm", arm, "--run-id", run_id, "--version", version]
         if tasks_file:
             cmd += ["--tasks-file", tasks_file]
-        proc = runner(cmd, cwd=settings.root, capture_output=True, text=True, check=False)
+        try:
+            proc = runner(
+                cmd, cwd=settings.root, capture_output=True, text=True, check=False, timeout=settings.run_timeout_s
+            )
+        except subprocess.TimeoutExpired:
+            print(
+                f"{task.id}: timed out after {settings.run_timeout_s}s and was killed; money already spent on it is in "
+                f"runs/{run_id}/events.jsonl. Continue it with `uv run margin resume --run-id {run_id}`.",
+                file=sys.stderr,
+            )
+            continue
         row = next((r for r in ledger.rows() if r.run_id == run_id), None)
         if row is None:
             print(f"{task.id}: no ledger row (exit {proc.returncode}): {proc.stderr[-500:]}", file=sys.stderr)
             continue
         spent += row.cost_usd
         run_ids.append(run_id)
+        infra_streak = infra_streak + 1 if row.infra_error else 0
+        if infra_streak >= INFRA_FAILURES_BEFORE_STOP:
+            raise InfrastructureFailure(
+                f"{infra_streak} consecutive runs failed for infrastructure reasons (last: {row.abort_reason}); "
+                "fix the cause (key, credits, network), then re-run with --only-missing"
+            )
     return run_ids

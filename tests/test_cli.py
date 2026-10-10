@@ -1,6 +1,6 @@
 import pytest
 
-from margin.cli import build_parser
+from margin.cli import build_parser, main
 
 
 def test_run_subcommand_parses_task_arm_and_defaults():
@@ -36,3 +36,10 @@ def test_resume_subcommand_requires_a_run_id():
     assert build_parser().parse_args(["resume", "--run-id", "r1"]).run_id == "r1"
     with pytest.raises(SystemExit):
         build_parser().parse_args(["resume"])
+
+
+def test_bench_refuses_to_run_while_a_fault_is_set(monkeypatch, capsys):
+    """A stray MARGIN_FAULT would silently inject faults into benchmark runs and waste the spend on rows that are ignored."""
+    monkeypatch.setenv("MARGIN_FAULT", "tool_timeout")
+    assert main(["bench", "--arm", "A", "--split", "calibration"]) == 2
+    assert "MARGIN_FAULT" in capsys.readouterr().out

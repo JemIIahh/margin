@@ -101,5 +101,7 @@ def render_receipt(r: RunRecord) -> str:
     ]
     if r.abort_reason:
         lines.append(f"- Stopped early: {r.abort_reason}")
+    if r.infra_error:
+        lines.append("- **Infrastructure failure: not a benchmark result.** The harness or the API failed; this run is excluded from the report.")
     lines += ["", "## Governor decisions", rungs, ""]
     return "\n".join(lines)

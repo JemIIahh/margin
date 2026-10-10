@@ -173,3 +173,66 @@ def solving_script():
             reply([text("fixed")]),
         ]
     )
+
+
+def test_a_failed_model_call_is_an_infrastructure_error_not_a_benchmark_result(tmp_path):
+    from margin.ledger import Ledger
+
+    task, settings = make_task(tmp_path), settings_for(tmp_path)
+    client = ScriptedClient([ValueError("401 invalid x-api-key")])      # a wrong key, exhausted credits, a request bug
+    rec = execute_run(
+        task, "A", settings, tasks_root=tmp_path, client=client, run_id="r-infra", venv_python=Path(sys.executable)
+    )
+    assert not rec.solved and rec.infra_error and "ValueError" in rec.abort_reason
+    assert Ledger(settings.ledger_path).latest("A") == {}               # it must not become the task's benchmark row
+    assert len(Ledger(settings.ledger_path).rows()) == 1                # but it is recorded, so the spend stays visible
+
+
+def test_tampering_found_after_the_run_still_records_the_paid_cost(tmp_path, monkeypatch):
+    from margin.ledger import Ledger
+    from margin.sandbox import GitTampered, Sandbox
+
+    def late(self):
+        raise GitTampered("config changed during the last test run")
+
+    monkeypatch.setattr(Sandbox, "revert_test_changes", late)
+    task, settings = make_task(tmp_path), settings_for(tmp_path)
+    rec = execute_run(
+        task, "A", settings, tasks_root=tmp_path, client=solving_script(), run_id="r-late", venv_python=Path(sys.executable)
+    )
+    assert rec.cost_usd > 0 and not rec.solved and not rec.infra_error
+    assert "tampering" in rec.verdict_reason
+    assert [r.run_id for r in Ledger(settings.ledger_path).rows()] == ["r-late"]
+
+
+def test_an_unexpected_error_while_judging_still_leaves_a_ledger_row(tmp_path, monkeypatch):
+    from margin.ledger import Ledger
+    from margin.sandbox import Sandbox
+
+    def boom(self):
+        raise RuntimeError("disk full")
+
+    monkeypatch.setattr(Sandbox, "revert_test_changes", boom)
+    task, settings = make_task(tmp_path), settings_for(tmp_path)
+    rec = execute_run(
+        task, "A", settings, tasks_root=tmp_path, client=solving_script(), run_id="r-judge", venv_python=Path(sys.executable)
+    )
+    assert rec.cost_usd > 0 and rec.infra_error and "harness error" in rec.verdict_reason
+    assert "disk full" in rec.verdict_reason
+    assert [r.run_id for r in Ledger(settings.ledger_path).rows()] == ["r-judge"]
+
+
+def test_an_unexpected_error_inside_the_agent_loop_still_leaves_a_ledger_row(tmp_path, monkeypatch):
+    from margin.agent.tools import ToolExecutor
+    from margin.ledger import Ledger
+
+    def boom(self, name, args):
+        raise RuntimeError("tool runner blew up")
+
+    monkeypatch.setattr(ToolExecutor, "execute", boom)
+    task, settings = make_task(tmp_path), settings_for(tmp_path)
+    rec = execute_run(
+        task, "A", settings, tasks_root=tmp_path, client=solving_script(), run_id="r-loop", venv_python=Path(sys.executable)
+    )
+    assert rec.cost_usd > 0 and rec.infra_error and "harness error" in (rec.abort_reason or "")
+    assert [r.run_id for r in Ledger(settings.ledger_path).rows()] == ["r-loop"]

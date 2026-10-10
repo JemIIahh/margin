@@ -153,3 +153,16 @@ def test_read_file_keeps_its_hint_to_use_line_ranges_after_clipping(sandbox, tmp
     sandbox.write_file("big.txt", "line of text\n" * 6000)
     out = make_executor(sandbox, tmp_path).execute("read_file", {"path": "big.txt"})
     assert "start_line" in out.text and "[output truncated]" not in out.text
+
+
+def test_a_failing_git_command_becomes_an_error_result_not_a_crash(sandbox, tmp_path, monkeypatch):
+    import subprocess
+
+    ex = make_executor(sandbox, tmp_path)
+
+    def broken():
+        raise subprocess.CalledProcessError(128, ["git", "add"], stderr="fatal: unable to read tree")
+
+    monkeypatch.setattr(sandbox, "git_diff", broken)
+    out = ex.execute("git_diff", {})
+    assert out.is_error and "git" in out.text

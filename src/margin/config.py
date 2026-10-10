@@ -33,6 +33,7 @@ class Settings:
     narrow_turns: int = 4
     naive_context_chars: int = 120_000
     test_timeout_s: int = 120
+    run_timeout_s: int = 7200  # one benchmark run, as a subprocess; a hung run must not block the batch
     fault: str | None = None
 
     @classmethod
@@ -53,6 +54,7 @@ _ENV_FIELDS = [
     ("MARGIN_DOWNGRADE_AT", "downgrade_at", float),
     ("MARGIN_NARROW_AT", "narrow_at", float),
     ("MARGIN_MAX_TURNS", "max_turns", int),
+    ("MARGIN_RUN_TIMEOUT_S", "run_timeout_s", int),
     ("MARGIN_MAIN_MODEL", "main_model", str),
     ("MARGIN_FALLBACK_MODEL", "fallback_model", str),
     ("MARGIN_FAULT", "fault", str),

@@ -13,6 +13,7 @@ from margin.agent.tools import ToolExecutor
 from margin.bench.tasks import Task, prepare_run
 from margin.config import Settings
 from margin.context import GraphError, naive_context
+from margin.errors import SimulatedCrash
 from margin.governor import Governor, NullGovernor
 from margin.ledger import Ledger, RunRecord, render_receipt, settle
 from margin.model import make_model_client
@@ -104,6 +105,7 @@ def execute_run(
     if resume:  # even with no checkpoint yet: calls made before the kill were paid for and are in the event log
         state.restore_meter(meter)
     tampered: str | None = None
+    harness_error: str | None = None
     try:
         result = run_agent(
             first_prompt=first_prompt(issue, context, task.target_tests), arm=arm,
@@ -111,29 +113,55 @@ def execute_run(
             state=state, prices=prices, settings=settings, faults=faults, resume=checkpoint,
             after_turn_hook=after_turn_hook,
         )
+    except SimulatedCrash:  # a killed process records nothing; `margin resume` continues it
+        raise
     except GitTampered as exc:  # ends the run as unsolved; every further git call would raise again
         tampered = str(exc)
         state.log("tampering", error=tampered)
         result = AgentResult("abort", 0, f"sandbox tampering detected: {tampered}")
+    except Exception as exc:  # noqa: BLE001 - money may already be spent, so whatever broke must still leave a row
+        harness_error = f"{type(exc).__name__}: {exc}"
+        state.log("harness_error", error=harness_error)
+        result = AgentResult("error", 0, f"harness error: {harness_error}")
 
     tests_touched: list[str] = []
+    no_targets = list(task.target_junit_ids)
     if tampered:
-        verdict = Verdict(False, list(task.target_junit_ids), [], f"sandbox tampering detected: {tampered}")
+        verdict = Verdict(False, no_targets, [], f"sandbox tampering detected: {tampered}")
+    elif harness_error:
+        verdict = Verdict(False, no_targets, [], f"harness error: {harness_error}")
     else:
-        # Judge the repository's own tests under its own configuration: undo every change to test files and test
-        # infrastructure (conftest.py, pytest config, ...) first, so nothing the agent wrote can change what passing means.
-        tests_touched = sandbox.revert_test_changes()
-        verdict = final_verdict(sandbox, prep.baseline, task.target_junit_ids, task.test_args, run_dir / "final.xml")
+        try:
+            # Judge the repository's own tests under its own configuration: undo every change to test files and test
+            # infrastructure (conftest.py, pytest config, ...) first, so nothing the agent wrote can change what passing means.
+            tests_touched = sandbox.revert_test_changes()
+            verdict = final_verdict(sandbox, prep.baseline, task.target_junit_ids, task.test_args, run_dir / "final.xml")
+        except GitTampered as exc:  # test code changed the git config during the last run
+            tampered = str(exc)
+            state.log("tampering", error=tampered)
+            verdict = Verdict(False, no_targets, [], f"sandbox tampering detected: {tampered}")
+        except Exception as exc:  # noqa: BLE001 - the spend so far must still be recorded
+            harness_error = f"{type(exc).__name__}: {exc}"
+            state.log("harness_error", error=harness_error)
+            verdict = Verdict(False, no_targets, [], f"harness error: {harness_error}")
+
+    if tampered:
+        abort_reason: str | None = f"sandbox tampering detected: {tampered}"
+    elif harness_error:
+        abort_reason = f"harness error: {harness_error}"
+    else:
+        abort_reason = None if result.stop == "end_turn" else (result.abort_reason or result.stop)
     revenue, margin = settle(price, verdict.solved, meter.total_usd)
     record = RunRecord(
         run_id=run_id, task_id=task.id, arm=arm, split=task.split, solved=verdict.solved,
         cost_usd=meter.total_usd, price_usd=price, revenue_usd=revenue, margin_usd=margin,
         tokens_total=meter.total_tokens, features=features, quote=quote, rung_events=result.rung_events,
-        abort_reason=None if result.stop == "end_turn" else (result.abort_reason or result.stop),
+        abort_reason=abort_reason,
         duration_s=round(time.time() - started, 1), fault=settings.fault,
         recoveries=len(state.events("recovery")) + len(state.events("retry")),
         started_at=time.strftime("%Y-%m-%dT%H:%M:%S%z", time.localtime(started)),
         trace_tags=trace_tags or [], verdict_reason=verdict.reason, tests_touched=tests_touched,
+        infra_error=harness_error is not None or result.stop == "error",
     )
     ledger.append(record)
     (run_dir / "receipt.md").write_text(render_receipt(record))

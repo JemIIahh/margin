@@ -76,3 +76,14 @@ def test_report_without_a_flat_price_says_what_to_run_instead_of_crashing(tmp_pa
             "--out", str(tmp_path / "r.md"), "--html", str(tmp_path / "r.html")]
     assert main(args) == 1
     assert "calibrate-flat" in capsys.readouterr().out
+
+
+def test_report_refuses_a_flat_price_the_ledger_does_not_support(tmp_path, capsys):
+    """make verify must regenerate the published numbers from the stored ledger, the flat price included."""
+    ledger = build_ledger(tmp_path)
+    flat = tmp_path / "flat.json"
+    flat.write_text(json.dumps({**FLAT, "flat_price_usd": 9.99}))
+    args = ["report", "--ledger", str(ledger.path), "--flat", str(flat),
+            "--out", str(tmp_path / "r.md"), "--html", str(tmp_path / "r.html")]
+    assert main(args) == 1 and "calibrate-flat" in capsys.readouterr().out
+    assert main([*args, "--check"]) == 1

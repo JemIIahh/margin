@@ -1,6 +1,7 @@
 """The agent's tools. Arms A, B and C share one executor; only the backends differ."""
 from __future__ import annotations
 
+import subprocess
 from dataclasses import dataclass
 from typing import Any
 
@@ -155,6 +156,8 @@ class ToolExecutor:
                 KeyError, TypeError, ValueError, OSError,
             ) as exc:
                 return ToolOutput(f"error: {type(exc).__name__}: {exc}", True)
+            except subprocess.CalledProcessError as exc:  # a git command failed inside a tool: the agent can see it
+                return ToolOutput(f"error: {' '.join(map(str, exc.cmd[:3]))} failed: {(exc.stderr or '')[:300]}", True)
 
     def digest(self) -> dict:
         return {"diff": self.sandbox.git_diff()[:20_000], "tests": self.last_tests_text or "(tests not run yet)"}

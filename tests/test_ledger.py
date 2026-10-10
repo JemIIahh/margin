@@ -89,3 +89,18 @@ def test_a_record_appended_after_a_torn_line_is_not_lost(tmp_path):
     with pytest.warns(UserWarning):
         rows = ledger.rows()
     assert [r.run_id for r in rows] == ["r1", "r3"]
+
+
+def test_latest_ignores_infrastructure_failures_but_they_stay_in_the_ledger_as_spend(tmp_path):
+    ledger = Ledger(tmp_path / "l.jsonl")
+    ledger.append(rec(run_id="ok", task="t1", arm="A", cost=1.0))
+    ledger.append(rec(run_id="bad", task="t1", arm="A", cost=0.25, solved=False, infra_error=True))   # a later row
+    assert ledger.latest("A")["t1"].run_id == "ok"
+    assert [r.run_id for r in ledger.rows()] == ["ok", "bad"]
+
+
+def test_a_receipt_says_when_a_run_failed_for_infrastructure_reasons():
+    from margin.ledger import render_receipt
+
+    text = render_receipt(rec(solved=False, infra_error=True))
+    assert "infrastructure" in text.lower() and "not a benchmark result" in text.lower()
