@@ -14,7 +14,7 @@ run `make verify` to regenerate `docs/results.md` from it and fail if it differs
 - How the 12 evaluation tasks (and 4 calibration tasks) were chosen, and which candidates were rejected and why: [`docs/notes/task-curation.md`](docs/notes/task-curation.md).
 
 ## You used neatlogs
-- Traces tagged `arm:A`, `arm:B`, `arm:C`: {{NEATLOGS_TRACE_LIST_URL_OR_SCREENSHOT_PATH}}.
+- Traces tagged `arm:A`, `arm:B`, `arm:C`: [screenshot of the trace list](docs/evidence/trace-list.jpg): 64 traces in the window, the newest 25 shown. Each trace carries four tags (`arm:`, `task:`, `split:`, `version:`), visible on its trace page. The red "Execution Failed" badges mark failed calls that were retried or recovered: the test-timeout demo (1), the API-overload demo (2) and a real API timeout on `mistune-420`.
 - Span kinds used: WORKFLOW, AGENT, TOOL, GUARDRAIL (governor, verifier, recoveries), plus LLM spans with tokens and cost.
 
 ## You used Entire
