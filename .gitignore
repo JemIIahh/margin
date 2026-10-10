@@ -21,3 +21,6 @@ bench/cache/
 .DS_Store
 .idea/
 .vscode/
+
+# local MCP config can embed a key
+.mcp.json
