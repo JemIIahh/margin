@@ -65,12 +65,14 @@ def _pct(value: float | None) -> str:
 
 
 def _money(value: float | None) -> str:
-    return "n/a" if value is None else f"${value:.2f}"
+    if value is None:
+        return "n/a"
+    return f"{'-' if round(value, 2) < 0 else ''}${abs(value):.2f}"
 
 
 def compare_table(summaries: dict[str, dict]) -> str:
     lines = [
-        "| Arm | Runs | Solve rate | Profitable jobs | Gross margin | Wasted spend | Tokens / solved fix |",
+        "| Arm | Runs | Solve rate | Profitable jobs | Gross margin | Wasted spend | Mean tokens / solved fix |",
         "|---|---|---|---|---|---|---|",
     ]
     for arm in sorted(summaries):
@@ -131,6 +133,8 @@ def render_results(ledger: Ledger, flat: dict) -> str:
         "## Arms on the evaluation tasks",
         "",
         compare_table(summaries),
+        "",
+        "Mean tokens per solved fix is the average prompt plus completion token count of the runs that verified.",
         "",
         "## Quote accuracy (arm B costs, leave-one-out)",
         "",
@@ -202,8 +206,9 @@ def render_receipts_page(rows: list[RunRecord]) -> str:
         ) or "<li>no governor action</li>"
         cards.append(
             f'<article class="{"ok" if row.solved else "no"}"><h2>{escape(row.task_id)}</h2><dl>'
-            f"<dt>Quoted cost band</dt><dd>{band}</dd><dt>Price</dt><dd>${row.price_usd:.2f}</dd>"
-            f"<dt>Actual cost</dt><dd>${row.cost_usd:.2f}</dd><dt>Result</dt><dd>{_verdict(row)}</dd>"
-            f"<dt>Margin</dt><dd>${row.margin_usd:.2f}</dd></dl><ul>{events}</ul></article>"
+            f"<dt>Quoted cost band</dt><dd>{band}</dd><dt>Price</dt><dd>{_money(row.price_usd)}</dd>"
+            f"<dt>Actual cost</dt><dd>{_money(row.cost_usd)}</dd><dt>Result</dt><dd>{_verdict(row)}</dd>"
+            f"<dt>Billed</dt><dd>{_money(row.revenue_usd)}</dd>"
+            f"<dt>Margin</dt><dd>{_money(row.margin_usd)}</dd></dl><ul>{events}</ul></article>"
         )
     return _PAGE_HEAD + "\n".join(cards) + "\n" + _PAGE_TAIL

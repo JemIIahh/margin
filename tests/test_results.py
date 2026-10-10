@@ -83,6 +83,14 @@ def test_receipts_page_escapes_task_ids_and_shows_governor_events():
     assert "ABORT" in page and "cap &amp; more" in page and "verified" in page
 
 
+def test_receipts_page_writes_a_negative_margin_with_the_sign_first_and_shows_what_was_billed():
+    lost = rec(task="lost", arm="C", solved=False, cost=0.13, price=0.22, quote={"p50": 0.1, "lo": 0.05, "hi": 0.15})
+    won = rec(task="won", arm="C", solved=True, cost=0.05, price=0.20, quote={"p50": 0.1, "lo": 0.05, "hi": 0.15})
+    page = render_receipts_page([lost, won])
+    assert "-$0.13" in page and "$-0.13" not in page
+    assert "<dt>Billed</dt><dd>$0.00</dd>" in page and "<dt>Billed</dt><dd>$0.20</dd>" in page
+
+
 def test_report_without_a_flat_price_says_what_to_run_instead_of_crashing(tmp_path, capsys):
     ledger = build_ledger(tmp_path)
     args = ["report", "--ledger", str(ledger.path), "--flat", str(tmp_path / "missing.json"),

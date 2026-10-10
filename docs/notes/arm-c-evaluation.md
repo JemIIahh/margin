@@ -9,7 +9,9 @@ the fix verified and nothing when it did not.
 | B (graph context, flat $0.3006) | 11 of 12 | $1.203 | $3.307 | +$2.104 | $0.109 |
 | C (graph context, quote and governor) | 9 of 12 | $1.162 | $3.129 | +$1.967 | $0.129 |
 
-Quote coverage: the actual cost fell inside the quoted band on 10 of the 12 tasks (out-of-sample, leave-one-out).
+Quote coverage, two measures: arm C's actual cost fell inside the band it was quoted on 10 of the 12 evaluation tasks; and the
+leave-one-out check on arm B's costs over all 16 tasks (`docs/results.md`) puts 14 of 16 inside their band, median quote off by
+a factor of 1.60.
 
 ## What the result does and does not show
 
