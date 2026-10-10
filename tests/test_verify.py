@@ -179,3 +179,21 @@ def test_a_test_that_passed_before_and_is_now_skipped_or_missing_blocks_the_verd
     v = judge(base, after, ["t::target"])
     assert not v.solved and v.new_failures == ["t::old"]
     assert "new failures" in v.reason
+
+
+def test_a_module_that_shadows_pytests_imports_makes_the_verdict_not_solved(sandbox, tmp_path):
+    """Beyond the protected names: anything under the worktree that `import pytest` loads means the runner is not ours."""
+    base = make_baseline(
+        run_suite(sandbox, ["tests"], tmp_path / "1.xml"), run_suite(sandbox, ["tests"], tmp_path / "2.xml")
+    )
+    target = [nodeid_to_junit("tests/test_mathy.py::test_add")]
+    (sandbox.root / "iniconfig.py").write_text(
+        "import os, sys\n"
+        "out = [a.split('=', 1)[1] for a in sys.argv if a.startswith('--junitxml=')][0]\n"
+        "open(out, 'w').write('<testsuites><testsuite>'\n"
+        "    '<testcase classname=\"tests.test_mathy\" name=\"test_add\"/>'\n"
+        "    '<testcase classname=\"tests.test_mathy\" name=\"test_other\"/></testsuite></testsuites>')\n"
+        "os._exit(0)\n"
+    )
+    verdict = final_verdict(sandbox, base, target, ["tests"], tmp_path / "3.xml")
+    assert not verdict.solved and "shadow" in verdict.reason and "iniconfig.py" in verdict.reason

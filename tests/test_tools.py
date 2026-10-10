@@ -204,3 +204,26 @@ def test_wrong_arguments_get_a_clear_message_without_python_internals(sandbox, t
     assert wrong.is_error and "start_line" in wrong.text and "integer" in wrong.text
     bool_as_int = ex.execute("read_file", {"path": "pkg/mathy.py", "start_line": True})
     assert bool_as_int.is_error                                     # True is an int in Python, not a line number
+
+
+def test_names_that_shadow_pytest_or_its_dependencies_are_protected(sandbox, tmp_path):
+    from margin.sandbox import is_test_path
+
+    for rel in ("pytest.py", "src/pytest.py", "_pytest/x.py", "pytest/__init__.py", "pluggy.py", "sub/pluggy/hooks.py"):
+        assert is_test_path(rel), rel
+    out = make_executor(sandbox, tmp_path).execute("write_file", {"path": "pytest.py", "content": "x = 1\n"})
+    assert out.is_error and "protected" in out.text and not (sandbox.root / "pytest.py").exists()
+
+
+def test_a_tool_error_never_shows_the_run_directory_either(sandbox, tmp_path, monkeypatch):
+    from margin.verify import NoJunit
+
+    ex = make_executor(sandbox, tmp_path)
+
+    def no_results(*args, **kwargs):
+        raise NoJunit(f"{sandbox.home}/junit-0.xml was not written; pytest exit 3")
+
+    monkeypatch.setattr("margin.agent.tools.run_suite", no_results)
+    out = ex.execute("run_tests", {})
+    assert out.is_error and "junit-0.xml was not written" in out.text
+    assert str(sandbox.root.parent) not in out.text and str(sandbox.home) not in out.text

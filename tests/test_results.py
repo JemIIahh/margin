@@ -108,3 +108,17 @@ def test_report_refuses_a_flat_price_the_ledger_does_not_support(tmp_path, capsy
             "--out", str(tmp_path / "r.md"), "--html", str(tmp_path / "r.html"), "--tasks-file", write_manifest(tmp_path)]
     assert main(args) == 1 and "calibrate-flat" in capsys.readouterr().out
     assert main([*args, "--check"]) == 1
+
+
+def test_results_page_says_which_costs_are_lower_bounds_because_of_api_timeouts(tmp_path):
+    ledger = build_ledger(tmp_path)
+    rows = ledger.rows()
+    for row in rows:
+        if row.arm == "B" and row.task_id == "e2":
+            row.api_timeouts = 2
+    clean = Ledger(tmp_path / "other.jsonl")
+    for row in rows:
+        clean.append(row)
+    page = render_results(clean, FLAT)
+    assert "lower bound" in page and "e2" in page and "2 API timeouts" in page
+    assert "lower bound" not in render_results(ledger, FLAT)

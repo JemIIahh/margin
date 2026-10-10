@@ -33,6 +33,9 @@ _TEST_INFRA_NAMES = {
     "conftest.py", "pytest.ini", ".pytest.ini", "tox.ini", "setup.cfg", "pyproject.toml",
     "sitecustomize.py", "usercustomize.py", ".coveragerc",
 }
+# `python -m pytest` runs with the worktree first on sys.path, so a module or package named like the runner would
+# replace it. The probe in `Sandbox.pytest_shadowed_by` checks what actually resolves; these names are the cheap first line.
+_RUNNER_NAMES = {"pytest", "_pytest", "pluggy"}
 
 
 def is_test_path(rel: str) -> bool:
@@ -41,9 +44,45 @@ def is_test_path(rel: str) -> bool:
     name = parts[-1]
     if name in _TEST_INFRA_NAMES or name.endswith(".pth"):
         return True
+    if any(part.removesuffix(".py") in _RUNNER_NAMES for part in parts):
+        return True
     if name.startswith("test_") or name.endswith("_test.py") or name in ("test.py", "tests.py"):
         return True
     return any(part in ("test", "tests", "testing") for part in parts[:-1])
+
+
+# Phase 1, in isolated mode (-I: the worktree is not on sys.path, no PYTHON* variables, so nothing in it can run): locate,
+# without executing, every module pytest depends on, searching the worktree and PYTHONPATH first as the real run does.
+_SHADOW_LOCATE = """
+import importlib.machinery, importlib.metadata, os, re, sys
+root = os.path.realpath(sys.argv[1]) + os.sep
+search = sys.argv[2:] + sys.path
+names = {"pytest", "_pytest", "pluggy"}
+for req in importlib.metadata.requires("pytest") or []:
+    if "extra ==" not in req:
+        names.add(re.split(r"[ ;<>=!~\\[(]", req, 1)[0].replace("-", "_").lower())
+for name in sorted(names):
+    spec = importlib.machinery.PathFinder.find_spec(name, search)
+    if spec is None:
+        continue
+    for where in [spec.origin, *(spec.submodule_search_locations or [])]:
+        if where and os.path.realpath(where).startswith(root):
+            print("shadow:" + os.path.relpath(os.path.realpath(where), root))
+print("PROBE-OK")
+"""
+
+# Phase 2, as the real run starts (cwd first on sys.path): the runner must import without loading anything from the
+# worktree and without the process exiting early; a module that quietly exits is caught by the missing last line.
+_SHADOW_IMPORT = """
+import os, sys
+root = os.path.realpath(sys.argv[1]) + os.sep
+import pytest, _pytest, pluggy
+for module in list(sys.modules.values()):
+    f = getattr(module, "__file__", None)
+    if f and os.path.realpath(f).startswith(root):
+        print("shadow:" + os.path.relpath(os.path.realpath(f), root))
+print("PROBE-OK")
+"""
 
 
 class PathEscape(Exception):
@@ -226,6 +265,30 @@ class Sandbox:
             "PYTHONHASHSEED": "0",
             "PYTHONPATH": os.pathsep.join(str(self.root / p) for p in self.pythonpath),
         }
+
+    def pytest_shadowed_by(self) -> list[str]:
+        """Files in the worktree that replace pytest or one of its dependencies, or why that could not be ruled out."""
+        self.home.mkdir(parents=True, exist_ok=True)
+        search = [str(self.root), *(str(self.root / p) for p in self.pythonpath)]
+        fake_args = [f"--junitxml={self.home / 'probe.xml'}"]  # what a cheat keyed on the real command line looks for
+        phases = [
+            ([str(self.venv_python), "-I", "-c", _SHADOW_LOCATE, str(self.root), *search], "locating its modules"),
+            ([str(self.venv_python), "-c", _SHADOW_IMPORT, str(self.root), *fake_args], "importing it"),
+        ]
+        for cmd, what in phases:
+            try:
+                proc = subprocess.run(
+                    cmd, cwd=self.root, env=self.scrubbed_env(), capture_output=True, text=True, timeout=60, check=False
+                )
+            except subprocess.TimeoutExpired:
+                return [f"({what} did not finish within 60s)"]
+            lines = proc.stdout.splitlines()
+            found = sorted({line[len("shadow:"):] for line in lines if line.startswith("shadow:")})
+            if found:
+                return found
+            if not lines or lines[-1] != "PROBE-OK":
+                return [f"({what} from the worktree did not complete)"]
+        return []
 
     def run_pytest(
         self, args: list[str], junit_path: Path, timeout_s: int | None = None

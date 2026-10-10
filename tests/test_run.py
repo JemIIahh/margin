@@ -236,3 +236,60 @@ def test_an_unexpected_error_inside_the_agent_loop_still_leaves_a_ledger_row(tmp
     )
     assert rec.cost_usd > 0 and rec.infra_error and "harness error" in (rec.abort_reason or "")
     assert [r.run_id for r in Ledger(settings.ledger_path).rows()] == ["r-loop"]
+
+
+FAKE_RUNNER = (
+    "import sys\n"
+    "out = [a.split('=', 1)[1] for a in sys.argv if a.startswith('--junitxml=')][0]\n"
+    "open(out, 'w').write('<testsuites><testsuite>'\n"
+    "    '<testcase classname=\"tests.test_mathy\" name=\"test_add\"/>'\n"
+    "    '<testcase classname=\"tests.test_mathy\" name=\"test_other\"/></testsuite></testsuites>')\n"
+)
+
+
+def test_a_pytest_py_planted_in_the_worktree_is_reverted_and_cannot_make_a_run_solved(tmp_path):
+    """A module named pytest at the root shadows the real one for `python -m pytest` and can write any JUnit it likes."""
+    task, settings = make_task(tmp_path), settings_for(tmp_path)
+    work = settings.runs_dir / "r-shadow" / "work"
+
+    def plant(turn):
+        (work / "pytest.py").write_text(FAKE_RUNNER)
+
+    client = ScriptedClient(
+        [reply([tool_use("t1", "read_file", {"path": "pkg/mathy.py"})], stop="tool_use"), reply([text("fixed")])]
+    )
+    rec = execute_run(
+        task, "A", settings, tasks_root=tmp_path, client=client, run_id="r-shadow",
+        venv_python=Path(sys.executable), after_turn_hook=plant,
+    )
+    assert not rec.solved and rec.tests_touched == ["pytest.py"]
+
+
+def test_a_baseline_that_cannot_run_is_recorded_as_an_infrastructure_failure_not_raised(tmp_path, monkeypatch):
+    from margin.sandbox import SuiteTimeout
+
+    task, settings = make_task(tmp_path), settings_for(tmp_path)
+
+    def hung(*args, **kwargs):
+        raise SuiteTimeout("tests exceeded 1s")
+
+    monkeypatch.setattr("margin.run.prepare_run", hung)
+    rec = execute_run(task, "A", settings, tasks_root=tmp_path, client=ScriptedClient([]), run_id="r-nobase")
+    assert not rec.solved and rec.infra_error and rec.cost_usd == 0.0
+    assert "harness error" in rec.verdict_reason and "SuiteTimeout" in rec.verdict_reason
+    assert [r.run_id for r in Ledger(settings.ledger_path).rows()] == ["r-nobase"]
+    assert (settings.runs_dir / "r-nobase" / "receipt.md").exists()
+
+
+def test_a_client_side_api_timeout_is_counted_on_the_row_because_the_request_may_have_been_billed(tmp_path):
+    from margin.errors import TransientModelError
+
+    class APITimeoutError(TransientModelError):  # same class name as openai's, which is what the retry log records
+        pass
+
+    task, settings = make_task(tmp_path), settings_for(tmp_path)
+    client = ScriptedClient([APITimeoutError("Request timed out."), reply([text("I give up")])])
+    rec = execute_run(
+        task, "A", settings, tasks_root=tmp_path, client=client, run_id="r-timeout", venv_python=Path(sys.executable)
+    )
+    assert rec.recoveries == 1 and rec.api_timeouts == 1

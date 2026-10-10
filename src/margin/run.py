@@ -63,7 +63,21 @@ def execute_run(
     (run_dir / "meta.json").write_text(json.dumps({"task_id": task.id, "arm": arm, "version": version}))
     started = time.time()
 
-    prep = prepare_run(task, run_dir, settings, venv_python=venv_python)
+    try:
+        prep = prepare_run(task, run_dir, settings, venv_python=venv_python)
+    except Exception as exc:  # noqa: BLE001 - a baseline that hangs or cannot run must leave a row, not a traceback
+        reason = f"harness error: {type(exc).__name__}: {exc}"
+        state.log("harness_error", error=reason)
+        failed = RunRecord(
+            run_id=run_id, task_id=task.id, arm=arm, split=task.split, solved=False, cost_usd=0.0, price_usd=0.0,
+            revenue_usd=0.0, margin_usd=0.0, tokens_total=0, abort_reason=reason,
+            duration_s=round(time.time() - started, 1), fault=settings.fault,
+            started_at=time.strftime("%Y-%m-%dT%H:%M:%S%z", time.localtime(started)),
+            trace_tags=trace_tags or [], verdict_reason=reason, infra_error=True,
+        )
+        ledger.append(failed)
+        (run_dir / "receipt.md").write_text(render_receipt(failed))
+        return failed
     sandbox = prep.sandbox
     issue = task.issue_text(tasks_root or settings.root)
 
@@ -168,6 +182,8 @@ def execute_run(
         started_at=time.strftime("%Y-%m-%dT%H:%M:%S%z", time.localtime(started)),
         trace_tags=trace_tags or [], verdict_reason=verdict.reason, tests_touched=tests_touched,
         infra_error=harness_error is not None or result.stop == "error",
+        api_timeouts=sum(1 for e in state.events("retry") if e.get("error") == "APITimeoutError")
+        + (1 if (harness_error or "").startswith("APITimeoutError") else 0),
     )
     ledger.append(record)
     (run_dir / "receipt.md").write_text(render_receipt(record))

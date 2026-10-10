@@ -103,6 +103,27 @@ def _verdict(row: RunRecord) -> str:
     return "verified" if row.solved else "not verified"
 
 
+def _timeout_caveat(latest: dict[str, dict[str, RunRecord]]) -> list[str]:
+    """Runs that hit a client-side API timeout: the timed-out request may have been billed upstream but is not in the cost."""
+    hit = sorted(
+        (row.task_id, arm, row.api_timeouts)
+        for arm, rows in latest.items() for row in rows.values() if row.api_timeouts and row.split == "evaluation"
+    )
+    if not hit:
+        return []
+    return [
+        "## Cost caveat",
+        "",
+        (
+            "A model call that times out on our side is retried, and the abandoned request may still have been billed by "
+            "the provider without appearing in the cost column. For these evaluation runs the cost is a lower bound:"
+        ),
+        "",
+        *(f"- `{task}` (arm {arm}): {n} API timeout{'s' if n != 1 else ''}" for task, arm, n in hit),
+        "",
+    ]
+
+
 def render_results(ledger: Ledger, flat: dict) -> str:
     flat_price = flat["flat_price_usd"]
     latest = {arm: ledger.latest(arm) for arm in ("A", "B", "C")}
@@ -136,6 +157,7 @@ def render_results(ledger: Ledger, flat: dict) -> str:
         "",
         "Mean tokens per solved fix is the average prompt plus completion token count of the runs that verified.",
         "",
+        *_timeout_caveat(latest),
         "## Quote accuracy (arm B costs, leave-one-out)",
         "",
     ]

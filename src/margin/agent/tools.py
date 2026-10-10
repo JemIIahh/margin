@@ -187,8 +187,11 @@ class ToolExecutor:
                 )
 
     def _scrub(self, text: str) -> str:
-        """Show repository-relative paths only: the absolute worktree path names the user's home directory."""
-        return text.replace(str(self.sandbox.root), ".")
+        """Show repository-relative paths only: an absolute worktree or run path names the user's home directory."""
+        roots = [(self.sandbox.root, "."), (self.sandbox.home, "<home>"), (self.sandbox.root.parent, "<run>")]
+        for path, shown in sorted(roots, key=lambda item: -len(str(item[0]))):  # the longest first, so none is half replaced
+            text = text.replace(str(path), shown)
+        return text
 
     def digest(self) -> dict:
         return {"diff": self.sandbox.git_diff()[:20_000], "tests": self.last_tests_text or "(tests not run yet)"}

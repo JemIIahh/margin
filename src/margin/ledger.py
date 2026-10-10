@@ -33,6 +33,7 @@ class RunRecord:
     verdict_reason: str = ""
     tests_touched: list = field(default_factory=list)  # test paths the agent changed; reverted before judging
     infra_error: bool = False  # the run failed for harness or infrastructure reasons, not on its merits
+    api_timeouts: int = 0  # client-side model-call timeouts: the request may have been billed without being counted
 
     def to_dict(self) -> dict:
         return {f.name: getattr(self, f.name) for f in fields(self)}

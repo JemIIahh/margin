@@ -134,6 +134,12 @@ def final_verdict(
     test_args: list[str],
     junit_path: Path,
 ) -> Verdict:
+    shadowed = sandbox.pytest_shadowed_by()
+    if shadowed:  # results written by something that replaced the runner prove nothing
+        return Verdict(
+            False, list(target_junit_ids), [], "the worktree shadows pytest, so its results cannot be trusted: "
+            + ", ".join(shadowed[:5])
+        )
     try:
         after = run_suite(sandbox, test_args, junit_path)
     except SuiteTimeout as exc:
