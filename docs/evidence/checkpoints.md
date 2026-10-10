@@ -78,6 +78,7 @@ The same id appears as an `Entire-Checkpoint:` trailer on each commit message.
 
 ## Privacy gate (plan Task 20, Step 4)
 
-Run on 2026-10-10 on the newest checkpoint, counting matches without recording the text. Patterns checked, 10 in all: the
-account email address, the email's domain, a first name, two account identifiers of a third-party service, every API key value in
-the local `.env`, any other email-shaped string with a real top-level domain, and the operating-system user name in paths.
+Run on 2026-10-10 on the checkpoint to be published, counting matches without recording the text. Nine checks: the account
+email address, the email's domain, a first name, two account identifiers of a third-party service, the two API key values in the
+local `.env` that are long enough to search for, any other email-shaped string with a real top-level domain (all zero), and the
+operating-system user name in paths (present, accepted).
