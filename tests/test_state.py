@@ -69,3 +69,11 @@ def test_an_event_logged_after_a_torn_line_is_not_lost_and_the_torn_line_is_repo
     with pytest.warns(UserWarning):
         types = [e["type"] for e in state.events()]
     assert types == ["first", "model_usage"]
+
+
+def test_a_checkpoint_that_is_not_json_is_reported_as_corrupt(tmp_path):
+    s = RunState(tmp_path / "run")
+    s.save_checkpoint(turn=1, messages=[{"role": "user", "content": "hi"}], model="m", effort="low", rung="CONTINUE", extra={})
+    s.checkpoint_path.write_text('{"turn": 1, "messages": [')
+    with pytest.raises(CorruptCheckpoint):
+        s.load_checkpoint()

@@ -99,7 +99,7 @@ def cmd_calibrate_flat(args: argparse.Namespace) -> int:
 
 
 def cmd_quote(args: argparse.Namespace) -> int:
-    from margin.bench.tasks import prepare_run
+    from margin.bench.tasks import prepare_run, remove_worktree
     from margin.context import GraphContext
     from margin.ledger import Ledger
     from margin.quote import Quoter, extract_features, training_rows
@@ -107,9 +107,12 @@ def cmd_quote(args: argparse.Namespace) -> int:
     settings = Settings.from_env()
     task = find_task(load_tasks(_tasks_path(args, settings)), args.task)
     prep = prepare_run(task, settings.runs_dir / f"quote-{task.id}", settings)
-    features = extract_features(
-        task.issue_text(settings.root), prep.sandbox.root, prep.baseline_seconds, GraphContext(prep.sandbox.root)
-    )
+    try:
+        features = extract_features(
+            task.issue_text(settings.root), prep.sandbox.root, prep.baseline_seconds, GraphContext(prep.sandbox.root)
+        )
+    finally:  # a quote only needs the features; do not leave a checkout behind for every quote asked
+        remove_worktree(prep.bare, prep.sandbox.root)
     rows = training_rows(Ledger(settings.ledger_path), exclude=task.id)
     quote = Quoter(rows, prior_cost=settings.default_cost_usd).quote(features)
     print(

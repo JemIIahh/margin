@@ -73,11 +73,13 @@ class Ledger:
                 out.append(row)
         return out
 
-    def latest(self, arm: str) -> dict[str, RunRecord]:
-        """Last benchmark row per task. Fault-injection, demo and infrastructure-failure rows never count."""
+    def latest(self, arm: str, version: str | None = None) -> dict[str, RunRecord]:
+        """Last benchmark row per task (of one version, if given). Fault, demo and infrastructure-failure rows never count."""
         out: dict[str, RunRecord] = {}
         for row in self.rows(arm):
             if row.fault or row.infra_error or any(tag.startswith("version:demo") for tag in row.trace_tags):
+                continue
+            if version is not None and f"version:{version}" not in row.trace_tags:
                 continue
             out[row.task_id] = row
         return out
@@ -90,15 +92,17 @@ def render_receipt(r: RunRecord) -> str:
         quote = "none (flat price)"
     rungs = "\n".join(f"- turn {e['turn']}: **{e['rung']}**: {e['reason']}" for e in r.rung_events) or "- none"
     verdict = "verified" if r.solved else "not verified"
+    flat = r.quote is None and r.arm in ("A", "B")  # the flat price is derived from the calibration runs, so it is set at report time
+    priced = "set at report time" if flat else None
     lines = [
         f"# Receipt: {r.task_id} (arm {r.arm})",
         "",
         f"- Quoted cost band: {quote}",
-        f"- Price: ${r.price_usd:.4f}",
+        f"- Price: {priced or f'${r.price_usd:.4f}'}",
         f"- Actual cost: ${r.cost_usd:.4f} ({r.tokens_total} tokens)",
         f"- Verdict: **{verdict}** ({r.verdict_reason or 'n/a'})",
-        f"- Revenue: ${r.revenue_usd:.4f}",
-        f"- Margin: ${r.margin_usd:.4f}",
+        f"- Revenue: {priced or f'${r.revenue_usd:.4f}'}",
+        f"- Margin: {priced or f'${r.margin_usd:.4f}'}",
     ]
     if r.abort_reason:
         lines.append(f"- Stopped early: {r.abort_reason}")

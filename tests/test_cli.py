@@ -43,3 +43,25 @@ def test_bench_refuses_to_run_while_a_fault_is_set(monkeypatch, capsys):
     monkeypatch.setenv("MARGIN_FAULT", "tool_timeout")
     assert main(["bench", "--arm", "A", "--split", "calibration"]) == 2
     assert "MARGIN_FAULT" in capsys.readouterr().out
+
+
+def test_quote_removes_the_worktree_it_prepared(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+
+    from margin.cli import main
+    from margin.quote import Features
+
+    tasks_file = tmp_path / "tasks.toml"
+    tasks_file.write_text(
+        '[[task]]\nid = "t1"\nsplit = "evaluation"\nrepo = "r"\nbase_commit = "b"\nfix_commit = "f"\n'
+        f'issue_url = "u"\nissue_file = "{tmp_path / "i.md"}"\ntarget_tests = []\ntest_files = []\n'
+    )
+    (tmp_path / "i.md").write_text("an issue")
+    prep = SimpleNamespace(sandbox=SimpleNamespace(root=tmp_path / "work"), baseline_seconds=1.0, bare=tmp_path / "bare")
+    removed = []
+    monkeypatch.setattr("margin.bench.tasks.prepare_run", lambda *a, **k: prep)
+    monkeypatch.setattr("margin.bench.tasks.remove_worktree", lambda bare, work: removed.append((bare, work)))
+    monkeypatch.setattr("margin.context.GraphContext", lambda root: None)
+    monkeypatch.setattr("margin.quote.extract_features", lambda *a, **k: Features(100, 3, 1000, 2.0))
+    assert main(["quote", "--task", "t1", "--tasks-file", str(tasks_file)]) == 0
+    assert removed == [(tmp_path / "bare", tmp_path / "work")]

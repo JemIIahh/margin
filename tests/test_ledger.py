@@ -104,3 +104,12 @@ def test_a_receipt_says_when_a_run_failed_for_infrastructure_reasons():
 
     text = render_receipt(rec(solved=False, infra_error=True))
     assert "infrastructure" in text.lower() and "not a benchmark result" in text.lower()
+
+
+def test_a_receipt_for_a_flat_priced_arm_says_the_price_is_set_at_report_time():
+    from margin.ledger import render_receipt
+
+    text = render_receipt(rec(arm="B", solved=False, cost=0.2, price=0.0))
+    assert "set at report time" in text and "Price: $0.0000" not in text and "Margin: $-" not in text
+    quoted = render_receipt(rec(arm="C", solved=False, cost=0.2, price=0.5, quote={"p50": 0.2, "lo": 0.1, "hi": 0.3}))
+    assert "Price: $0.5000" in quoted and "set at report time" not in quoted

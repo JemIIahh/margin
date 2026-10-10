@@ -1,9 +1,11 @@
 """Batch runner: one subprocess per (task, arm) so neatlogs tags are per run, with a global spend guard."""
 from __future__ import annotations
 
+import json
 import subprocess
 import sys
 from collections.abc import Callable
+from pathlib import Path
 
 from margin.bench.tasks import Task
 from margin.config import Settings
@@ -22,6 +24,22 @@ class InfrastructureFailure(RuntimeError):
 INFRA_FAILURES_BEFORE_STOP = 2
 
 
+def _logged_spend(run_dir: Path) -> float:
+    """What a run's own event log says it spent, for a run that never wrote its ledger row."""
+    path = run_dir / "events.jsonl"
+    if not path.exists():
+        return 0.0
+    total = 0.0
+    for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
+        try:
+            event = json.loads(line)
+        except ValueError:  # a line torn by the kill
+            continue
+        if event.get("type") == "model_usage":
+            total += float(event.get("cost", 0.0))
+    return total
+
+
 def run_batch(
     tasks: list[Task],
     arm: str,
@@ -36,7 +54,7 @@ def run_batch(
     ledger = Ledger(settings.ledger_path)
     spent = sum(r.cost_usd for r in ledger.rows())
     # "done" means a real benchmark row: infrastructure failures, fault runs and demo runs do not count
-    done = set(ledger.latest(arm)) if only_missing else set()
+    done = set(ledger.latest(arm, version)) if only_missing else set()  # of this version: older rows do not count
     run_ids: list[str] = []
     infra_streak = 0
     for task in tasks:
@@ -60,10 +78,12 @@ def run_batch(
                 f"runs/{run_id}/events.jsonl. Continue it with `uv run margin resume --run-id {run_id}`.",
                 file=sys.stderr,
             )
+            spent += _logged_spend(settings.runs_dir / run_id)  # a killed run leaves no row but its calls were paid for
             continue
         row = next((r for r in ledger.rows() if r.run_id == run_id), None)
         if row is None:
             print(f"{task.id}: no ledger row (exit {proc.returncode}): {proc.stderr[-500:]}", file=sys.stderr)
+            spent += _logged_spend(settings.runs_dir / run_id)
             continue
         spent += row.cost_usd
         run_ids.append(run_id)

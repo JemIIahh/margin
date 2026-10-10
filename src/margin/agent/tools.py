@@ -172,6 +172,8 @@ class ToolExecutor:
                 return ToolOutput(f"error: unknown tool {name!r}", True)
             if not isinstance(args, dict):
                 return ToolOutput("error: tool input must be a JSON object", True)
+            required = SCHEMAS[name]["input_schema"]["required"]
+            args = {k: v for k, v in args.items() if v is not None or k in required}  # null for an optional means "not given"
             if (problem := _check_args(name, args)) is not None:
                 return ToolOutput(problem, True)
             try:

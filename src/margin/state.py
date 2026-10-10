@@ -68,7 +68,10 @@ class RunState:
     def load_checkpoint(self) -> dict | None:
         if not self.checkpoint_path.exists():
             return None
-        data = json.loads(self.checkpoint_path.read_text(encoding="utf-8"))
+        try:
+            data = json.loads(self.checkpoint_path.read_text(encoding="utf-8"))
+        except ValueError as exc:  # truncated or garbled on disk
+            raise CorruptCheckpoint(f"{self.checkpoint_path} is not valid JSON: {exc}") from exc
         if data.get("digest") != _digest(data.get("messages", [])):
             raise CorruptCheckpoint(f"{self.checkpoint_path} failed its digest check")
         return data

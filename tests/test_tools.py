@@ -227,3 +227,11 @@ def test_a_tool_error_never_shows_the_run_directory_either(sandbox, tmp_path, mo
     out = ex.execute("run_tests", {})
     assert out.is_error and "junit-0.xml was not written" in out.text
     assert str(sandbox.root.parent) not in out.text and str(sandbox.home) not in out.text
+
+
+def test_a_null_for_an_optional_argument_means_not_given(sandbox, tmp_path):
+    ex = make_executor(sandbox, tmp_path)
+    out = ex.execute("read_file", {"path": "pkg/mathy.py", "start_line": None, "end_line": None})
+    assert not out.is_error and "return a - b" in out.text
+    required = ex.execute("read_file", {"path": None})
+    assert required.is_error and "path" in required.text

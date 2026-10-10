@@ -44,9 +44,39 @@ def test_batch_stops_before_the_next_run_once_the_budget_is_spent(tmp_path):
 def test_only_missing_skips_tasks_that_already_have_a_row(tmp_path):
     settings = Settings(ledger_path=tmp_path / "ledger.jsonl", bench_budget_usd=100.0, root=tmp_path)
     ledger = Ledger(settings.ledger_path)
-    ledger.append(rec(run_id="old", task="t1", arm="A"))
+    ledger.append(rec(run_id="old", task="t1", arm="A", trace_tags=["version:v1"]))
     ids = run_batch([task(1), task(2)], "A", settings, version="v1", runner=fake_runner(ledger, 0.1), only_missing=True)
     assert len(ids) == 1
+
+
+def test_only_missing_looks_at_the_requested_version_not_at_older_ones(tmp_path):
+    settings = Settings(ledger_path=tmp_path / "ledger.jsonl", bench_budget_usd=100.0, root=tmp_path)
+    ledger = Ledger(settings.ledger_path)
+    ledger.append(rec(run_id="old", task="t1", arm="A", trace_tags=["version:v1"]))
+    ids = run_batch([task(1)], "A", settings, version="v2", runner=fake_runner(ledger, 0.1), only_missing=True)
+    assert len(ids) == 1                                  # a v1 row does not mean t1 is done for v2
+
+
+def test_the_spend_of_a_run_killed_on_timeout_still_counts_against_the_budget(tmp_path, capsys):
+    import json
+    import subprocess
+
+    settings = Settings(
+        ledger_path=tmp_path / "ledger.jsonl", runs_dir=tmp_path / "runs", bench_budget_usd=0.05, root=tmp_path
+    )
+    launched = []
+
+    def killed(cmd, **kwargs):
+        run_id = cmd[cmd.index("--run-id") + 1]
+        launched.append(run_id)
+        run_dir = settings.runs_dir / run_id
+        run_dir.mkdir(parents=True)
+        (run_dir / "events.jsonl").write_text(json.dumps({"type": "model_usage", "cost": 0.06}) + "\n")
+        raise subprocess.TimeoutExpired(cmd, 1)
+
+    with pytest.raises(BudgetExceeded):
+        run_batch([task(1), task(2)], "A", settings, version="v1", runner=killed)
+    assert len(launched) == 1                             # the second task never started
 
 
 def test_a_subprocess_that_writes_no_row_is_skipped_not_fatal(tmp_path, capsys):
