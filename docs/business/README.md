@@ -30,8 +30,8 @@ attempts, and an average quoted price of **$0.34 per verified fix** (about $0.26
   which is true only because the loss is small; it does not mean the business is healthy.
 - **At $0.60, with 15% fewer jobs, the base case is profitable** once the first payments arrive: customers pay a month after billing, so
   October and November are negative while the fixed costs run.
-- **Neither scenario pays a $2,000 founder salary** from $3,000 of starting cash: the balance with salary is negative from November 2026
-  in every scenario in the export.
+- **No scenario pays a $2,000 founder salary** from $3,000 of starting cash: in the base case at $0.34 the balance with salary turns
+  negative in November 2026, and in every scenario in the quarterly comparison it is negative by the end of 2026.
 - The growth scenario depends entirely on the assumed 25% monthly growth.
 
 ## Limits (see `assumptions.md` for the list)
