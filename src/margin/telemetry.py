@@ -22,7 +22,8 @@ def init_telemetry(workflow_name: str, tags: list[str]) -> bool:
         return False
     import neatlogs
 
-    neatlogs.init(api_key=key, workflow_name=workflow_name, instrumentations=["anthropic"], tags=tags)
+    sdk = "openai" if os.environ.get("MARGIN_PROVIDER") == "litellm" else "anthropic"
+    neatlogs.init(api_key=key, workflow_name=workflow_name, instrumentations=[sdk], tags=tags)
     _enabled = True
     return True
 

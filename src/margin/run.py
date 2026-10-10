@@ -106,10 +106,12 @@ def execute_run(
         state.restore_meter(meter)
     tampered: str | None = None
     harness_error: str | None = None
+    model_client = None
     try:
+        model_client = client or make_model_client(settings)
         result = run_agent(
             first_prompt=first_prompt(issue, context, task.target_tests), arm=arm,
-            client=client or make_model_client(settings), meter=meter, governor=governor, executor=executor,
+            client=model_client, meter=meter, governor=governor, executor=executor,
             state=state, prices=prices, settings=settings, faults=faults, resume=checkpoint,
             after_turn_hook=after_turn_hook,
         )
@@ -123,6 +125,10 @@ def execute_run(
         harness_error = f"{type(exc).__name__}: {exc}"
         state.log("harness_error", error=harness_error)
         result = AgentResult("error", 0, f"harness error: {harness_error}")
+
+    proxy_usd = getattr(model_client, "proxy_cost_usd", None)
+    if proxy_usd is not None:  # the proxy's own bill for this run, to compare with our metering
+        state.log("proxy_cost", proxy_usd=round(proxy_usd, 6), metered_usd=round(meter.total_usd, 6))
 
     tests_touched: list[str] = []
     no_targets = list(task.target_junit_ids)

@@ -18,6 +18,7 @@ class Settings:
     cache_dir: Path = ROOT / "bench" / "cache"
     pricing_path: Path = ROOT / "pricing.toml"
     target_markup: float = 0.5
+    provider: str = "anthropic"  # anthropic | litellm (the event proxy)
     main_model: str = "claude-sonnet-5-5"
     fallback_model: str = "claude-haiku-5-5"
     main_effort: str = "medium"
@@ -55,6 +56,7 @@ _ENV_FIELDS = [
     ("MARGIN_NARROW_AT", "narrow_at", float),
     ("MARGIN_MAX_TURNS", "max_turns", int),
     ("MARGIN_RUN_TIMEOUT_S", "run_timeout_s", int),
+    ("MARGIN_PROVIDER", "provider", str),
     ("MARGIN_MAIN_MODEL", "main_model", str),
     ("MARGIN_FALLBACK_MODEL", "fallback_model", str),
     ("MARGIN_FAULT", "fault", str),

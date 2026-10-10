@@ -15,3 +15,31 @@ cache_write = 0.125    # 1.25x input (5-minute TTL)
 cache_read = 0.01      # 0.1x input
 long_prompt_threshold = 100000   # a request whose prompt is OVER 100K tokens (input + cache reads + cache writes)
 long_prompt_multiplier = 5.0     # pays 5x on every category: 0.50 / 2.50 / 0.625 / 0.05
+
+# --- The event's LiteLLM proxy (MARGIN_PROVIDER=litellm). Rates are the proxy's own, from GET /model/info on
+# 2026-10-10, and match its per-call x-litellm-response-cost headers (see tests/test_model_openai.py).
+# Cache writes on Nova bill at the input rate; on Claude at 1.25x. No long-prompt tier applies.
+
+[models."claude-haiku"]
+input = 1.10
+output = 5.50
+cache_write = 1.375
+cache_read = 0.11
+
+[models."claude-sonnet-4.6"]
+input = 3.30
+output = 16.50
+cache_write = 4.125
+cache_read = 0.33
+
+[models."nova-2-lite"]
+input = 0.33
+output = 2.75
+cache_write = 0.33
+cache_read = 0.0825
+
+[models."nova-lite"]
+input = 0.06
+output = 0.24
+cache_write = 0.06
+cache_read = 0.015

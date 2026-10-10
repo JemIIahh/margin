@@ -34,7 +34,13 @@ class AnthropicModel:
         return self._client.messages.create(**params)
 
 
-def make_model_client(settings: Settings) -> AnthropicModel:
+def make_model_client(settings: Settings) -> Any:
+    if settings.provider == "litellm":  # the event's OpenAI-compatible proxy; see margin.model_openai
+        from margin.model_openai import make_litellm_client
+
+        return make_litellm_client()
+    if settings.provider != "anthropic":
+        raise ValueError(f"unknown provider {settings.provider!r}; choose anthropic or litellm")
     import anthropic
 
     return AnthropicModel(anthropic.Anthropic(max_retries=0))  # our loop owns retries so each is visible
@@ -47,4 +53,12 @@ def is_transient(exc: BaseException) -> bool:
 
     if isinstance(exc, (anthropic.RateLimitError, anthropic.APIConnectionError)):
         return True
-    return isinstance(exc, anthropic.APIStatusError) and exc.status_code >= 500
+    if isinstance(exc, anthropic.APIStatusError) and exc.status_code >= 500:
+        return True
+    try:
+        import openai
+    except ImportError:
+        return False
+    if isinstance(exc, (openai.RateLimitError, openai.APIConnectionError)):
+        return True
+    return isinstance(exc, openai.APIStatusError) and exc.status_code >= 500
