@@ -189,9 +189,11 @@ class Sandbox:
         self, args: list[str], junit_path: Path, timeout_s: int | None = None
     ) -> subprocess.CompletedProcess:
         limit = timeout_s or self.test_timeout_s
+        # --rootdir pins test ids to the repo. Without it pytest walks up to the nearest config file, which for a
+        # repo with none is the host project's, and every junit classname gets the worktree path prefixed.
         cmd = [
             str(self.venv_python), "-m", "pytest", "-q", "-p", "no:cacheprovider",
-            f"--junitxml={junit_path}", *args,
+            f"--rootdir={self.root}", f"--junitxml={junit_path}", *args,
         ]
         try:
             return subprocess.run(

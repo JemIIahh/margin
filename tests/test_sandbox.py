@@ -180,3 +180,21 @@ def test_normal_git_operations_work_in_a_worktree(repo, tmp_path):
     sb.exclude([".entire/"])
     sb.write_file(".entire/cache", "1")
     assert ".entire" not in sb.git_diff()
+
+
+def test_junit_ids_do_not_depend_on_where_the_worktree_lives(tmp_path):
+    """pytest picks its rootdir by walking up to the nearest config file. A repo with no config of its own,
+    checked out under a directory that has one (as every run is, under the Margin project), must still
+    report ids relative to the repo, or no target test id would ever match."""
+    from margin.verify import parse_junit
+
+    (tmp_path / "pytest.ini").write_text("[pytest]\naddopts = -q\n")  # the 'host project' config above the repo
+    repo = tmp_path / "deep" / "nested" / "repo"
+    (repo / "tests").mkdir(parents=True)
+    (repo / "tests" / "test_x.py").write_text("def test_ok():\n    assert True\n")
+    git(repo, "init", "-q", "-b", "main")
+    git(repo, "add", "-A")
+    git(repo, "commit", "-q", "-m", "init")
+    sb = Sandbox(repo, Path(sys.executable), ["."], tmp_path / "home")
+    sb.run_pytest(["tests"], tmp_path / "j.xml")
+    assert parse_junit(tmp_path / "j.xml").passed == frozenset({"tests.test_x::test_ok"})
