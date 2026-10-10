@@ -22,6 +22,10 @@
 | Salaries | none (solo founder, $0 pay) |
 | Starting cash | $3,000 as of 2026-10-10 (illustrative, not a real balance) |
 | Price points tested | $0.34 and $0.60 per verified fix |
+| Volume at the higher price | 15% fewer jobs at $0.60 than at $0.34 |
+| Founder salary (comparison only) | runway also shown with $2,000 a month; the main case has none |
+| Raise | none, committed or planned |
+| Quote band | the measured quoted prices ($0.18 to $0.67, average $0.34) |
 
 ## Caveats
 - The benchmark jobs are small fixes to open-source issues made by a cheap model (`claude-haiku` through the event's proxy). Real
