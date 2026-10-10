@@ -47,6 +47,7 @@ run `make verify` to regenerate `docs/results.md` from it and fail if it differs
 - 16 tasks is a small sample, and most are small single-function fixes: treat percentages as indicative, and see the per-task table for every run.
 - The tasks were selected by the build agent from mined candidates, with every rejected candidate recorded; selection was not blind to difficulty.
 - Model prices come from `pricing.toml`, checked on 2026-10-10.
+- The agent runs on the event's LiteLLM proxy models (`claude-haiku`, fallback `nova-2-lite`), not on Sonnet 5.5. Solve rates and costs describe those models and are not comparable with a Sonnet 5.5 run.
 - Quote accuracy is reported out of sample (leave-one-out), including the misses.
 - Until the benchmark is run, no result in this file is a measurement of the live agent: the pipeline is verified offline with scripted model replies.
 - The business plan's volumes, fixed costs and starting cash are the builder's assumptions, labelled as such in `docs/business/assumptions.md`.

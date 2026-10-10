@@ -12,7 +12,7 @@ Solo. Registered team name: Sofer.
 
 ## Stack
 
-- Python 3.12 (via uv), Anthropic SDK (`claude-sonnet-5-5`, `claude-haiku-5-5`)
+- Python 3.12 (via uv). Live runs use the event's LiteLLM proxy (`claude-haiku`, fallback `nova-2-lite`) through the OpenAI SDK; the Anthropic SDK path (`claude-sonnet-5-5`, `claude-haiku-5-5`) is the default provider and has only been tested offline
 - neatlogs SDK (traces), neatlogs MCP (trace queries from the coding session)
 - Entire CLI 0.11.4 (checkpoints, refs backend) and entire-graph v0.4.0
 - cfo.ai (business plan)
@@ -39,16 +39,25 @@ Solo. Registered team name: Sofer.
 - Checked the Entire checkpoints for the privacy gate: they hold full session transcripts, including local paths and email addresses, so they are not published and `push_sessions` stays off (`docs/evidence/checkpoints.md`).
 - Ran `entire graph stats` over the build sessions. It reports about zero savings because those sessions barely used the graph; that says nothing about Margin's runtime, which is measured as tokens per solved fix between arms A and B.
 
+### 2026-10-10 (first live runs)
+
+- Switched the model provider to the event's LiteLLM proxy (an OpenAI-compatible endpoint) with an adapter that converts the Anthropic-shaped requests and replies. The agent's own spend metering was checked against the proxy's per-request cost header: ratio 1.00 over the first four arm A runs.
+- A hello trace read back from neatlogs through its MCP showed failed spans marked as successes and model-call spans with zero tokens. Both were fixed in the telemetry shim and the adapter, and checked live (error status, 22 input and 5 output tokens).
+- Calibration runs (4 tasks, version v2): arm A solved 3 of 4 for $0.80 in total; arm B (graph context) solved 3 of 4 for $0.37. Both fail `sqlparse-772` at the turn limit, which makes it the benchmark's cost-overrun case. Four tasks are indicative only. Flat price from arm A: $0.3006 (mean cost $0.2004 x 1.5).
+- Reading the first traces found two gaps in the shared core, fixed with a failing test first and then both arms re-run: tool errors leaked the absolute worktree path and Python internals, and `run_tests` named the failing tests without saying why. It now shows the assertion message.
+- Reading the result found a bug in the price calibration: the smoke-test run was counted as a fifth calibration task (price $0.2437). The calibration now takes the manifest's calibration tasks only.
+
 ## Demo
 
 Not available yet.
 
 ## Known limitations and next steps
 
-- No live model call has been made yet. The Anthropic request shape was checked against the installed SDK, but real behaviour, the neatlogs span rendering and the cost of a run are unmeasured.
-- The benchmark has not been run: arms A, B and C, the quote coverage, the failure-recovery runs and the cfo.ai plan all wait on API keys and on the builder's cfo.ai account.
+- Live runs use the event's proxy models (`claude-haiku`, fallback `nova-2-lite`), not Sonnet 5.5, so solve rates and costs are specific to them. The Anthropic provider path has not been run live.
+- Only the 4 calibration tasks have been run on both arms so far; the 12 evaluation tasks, arm C, quote accuracy, the failure-recovery runs and the cfo.ai plan are not finished. Four tasks say nothing yet about whether graph context or the quote helps.
+- Whether the custom `margin.*` span attributes and the `arm:`/`version:` tags show in the neatlogs dashboard is not checked; spans were read back through the neatlogs MCP only.
 - Network access is not blocked inside the test sandbox; the 16 tasks were verified to need none, and the sandbox's other limits are listed in `EVIDENCE.md`.
-- Next: put the two API keys in `.env`, run arm A on the calibration tasks, then B, then C (see the plan).
+- Next: arm A, B and C on the 12 evaluation tasks, then the failure-recovery demo, the results page and the cfo.ai plan.
 
 ## Submission
 
