@@ -31,6 +31,21 @@ def cmd_run(args: argparse.Namespace) -> int:
         shutdown_telemetry()
 
 
+def cmd_tasks_validate(args: argparse.Namespace) -> int:
+    from margin.bench.tasks import validate_task
+
+    settings = Settings.from_env()
+    tasks = load_tasks(_tasks_path(args, settings))
+    chosen = [find_task(tasks, i) for i in args.ids] if args.ids else tasks
+    failures = 0
+    for task in chosen:
+        result = validate_task(task, settings)
+        status = "ok  " if result["ok"] else "FAIL"
+        print(f"{status} {task.id} ({result['baseline_seconds']}s) {'; '.join(result['problems'])}")
+        failures += 0 if result["ok"] else 1
+    return 1 if failures else 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="margin")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -42,6 +57,13 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--run-id", default=None)
     run.add_argument("--version", default="v1")
     run.set_defaults(func=cmd_run)
+
+    tasks = sub.add_parser("tasks", help="inspect and validate the benchmark tasks")
+    tasks_sub = tasks.add_subparsers(dest="tasks_command", required=True)
+    validate = tasks_sub.add_parser("validate", help="check tasks are usable")
+    validate.add_argument("--ids", nargs="*", default=None)
+    validate.add_argument("--tasks-file", default=None)
+    validate.set_defaults(func=cmd_tasks_validate)
     return parser
 
 

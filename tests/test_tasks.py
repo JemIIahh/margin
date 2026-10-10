@@ -78,3 +78,13 @@ def test_prepare_run_rejects_a_fix_commit_without_test_changes(tmp_path):
     bad = Task(**{**task.__dict__, "test_files": ["pkg/__init__.py"]})
     with pytest.raises(ValueError, match="changes none of test_files"):
         prepare_run(bad, tmp_path / "run3", settings_for(tmp_path), venv_python=Path(sys.executable))
+
+
+def test_setup_commands_run_without_api_keys(monkeypatch):
+    from margin.bench.tasks import _run
+
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-secret")
+    monkeypatch.setenv("NEATLOGS_API_KEY", "nl-secret")
+    env = dict(line.split("=", 1) for line in _run(["env"]).stdout.splitlines() if "=" in line)
+    assert "ANTHROPIC_API_KEY" not in env and "NEATLOGS_API_KEY" not in env
+    assert env["PATH"] and env["HOME"]

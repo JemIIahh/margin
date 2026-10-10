@@ -12,3 +12,9 @@ def test_run_subcommand_parses_task_arm_and_defaults():
 def test_an_unknown_arm_is_rejected_before_anything_runs():
     with pytest.raises(SystemExit):
         build_parser().parse_args(["run", "--task", "t1", "--arm", "D"])
+
+
+def test_tasks_validate_subcommand_parses_ids():
+    args = build_parser().parse_args(["tasks", "validate", "--ids", "a", "b"])
+    assert args.ids == ["a", "b"] and args.tasks_file is None
+    assert build_parser().parse_args(["tasks", "validate"]).ids is None

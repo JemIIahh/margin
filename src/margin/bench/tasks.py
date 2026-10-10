@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import json
+import os
+import shutil
 import subprocess
 import time
 import tomllib
@@ -10,7 +12,7 @@ from pathlib import Path
 
 from margin.config import Settings
 from margin.sandbox import DEFAULT_EXCLUDES, Sandbox
-from margin.verify import Baseline, make_baseline, nodeid_to_junit, run_suite
+from margin.verify import Baseline, final_verdict, make_baseline, nodeid_to_junit, run_suite
 
 
 @dataclass(frozen=True)
@@ -56,8 +58,22 @@ class Prepared:
     bare: Path
 
 
+# Setup commands (git, uv) handle third-party repositories and dependencies, so they get an allowlisted
+# environment: enough to find tools, caches, proxies and certificates, never an API key.
+_SETUP_ENV_NAMES = {
+    "PATH", "HOME", "LANG", "LC_ALL", "TMPDIR", "USER", "SSL_CERT_FILE", "SSL_CERT_DIR", "REQUESTS_CA_BUNDLE",
+    "HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY", "http_proxy", "https_proxy", "no_proxy",
+}
+
+
+def _setup_env() -> dict[str, str]:
+    env = {k: v for k, v in os.environ.items() if k in _SETUP_ENV_NAMES or k.startswith("UV_")}
+    env["GIT_TERMINAL_PROMPT"] = "0"
+    return env
+
+
 def _run(cmd: list[str]) -> subprocess.CompletedProcess:
-    return subprocess.run(cmd, check=True, capture_output=True, text=True)
+    return subprocess.run(cmd, check=True, capture_output=True, text=True, env=_setup_env())
 
 
 def ensure_bare_clone(task: Task, cache_dir: Path) -> Path:
@@ -132,3 +148,66 @@ def prepare_run(
     sandbox.exclude(DEFAULT_EXCLUDES)
     baseline, seconds = snapshot_baseline(task, sandbox, settings.cache_dir, run_dir, use_cache=use_baseline_cache)
     return Prepared(sandbox, baseline, seconds, bare)
+
+
+def remove_worktree(bare: Path, work: Path) -> None:
+    subprocess.run(
+        ["git", "-C", str(bare), "worktree", "remove", "--force", str(work)],
+        capture_output=True, check=False, env=_setup_env(),
+    )
+    shutil.rmtree(work, ignore_errors=True)
+    subprocess.run(["git", "-C", str(bare), "worktree", "prune"], capture_output=True, check=False, env=_setup_env())
+
+
+def validate_task(
+    task: Task,
+    settings: Settings,
+    *,
+    venv_python: Path | None = None,
+    max_seconds: float = 60,
+    max_source_files: int = 3,
+) -> dict:
+    """Prove a task is usable: its tests fail before the real fix, pass after it, and it is small and fast."""
+    run_dir = Path(settings.cache_dir) / "validation" / task.id
+    bare = ensure_bare_clone(task, settings.cache_dir)
+    remove_worktree(bare, run_dir / "work")
+    shutil.rmtree(run_dir, ignore_errors=True)
+
+    problems: list[str] = []
+    prep = prepare_run(task, run_dir, settings, venv_python=venv_python, use_baseline_cache=False)
+    missing = [t for t in task.target_junit_ids if t not in prep.baseline.failing]
+    if missing:
+        problems.append(f"target tests do not fail before the fix: {missing}")
+
+    changed = _run(["git", "-C", str(bare), "diff", "--name-only", task.base_commit, task.fix_commit]).stdout.split()
+    source_files = [f for f in changed if f not in task.test_files]
+    if not source_files:
+        problems.append("the fix commit changes no source files")
+    if len(source_files) > max_source_files:
+        problems.append(f"the fix touches {len(source_files)} source files (limit {max_source_files})")
+    if prep.baseline_seconds > max_seconds:
+        problems.append(f"the suite takes {prep.baseline_seconds:.1f} seconds (limit {max_seconds})")
+
+    excludes = [f":(exclude){f}" for f in task.test_files]
+    fix = _run(
+        ["git", "-C", str(bare), "diff", "--binary", task.base_commit, task.fix_commit, "--", ".", *excludes]
+    ).stdout
+    fix_file = run_dir / "fix.patch"
+    fix_file.write_text(fix)
+    _run(["git", "-C", str(prep.sandbox.root), "apply", str(fix_file)])
+    verdict = final_verdict(prep.sandbox, prep.baseline, task.target_junit_ids, task.test_args, run_dir / "after.xml")
+    if not verdict.solved:
+        problems.append(f"the real fix does not satisfy the verifier: {verdict.reason}")
+
+    result = {
+        "id": task.id,
+        "ok": not problems,
+        "problems": problems,
+        "baseline_seconds": round(prep.baseline_seconds, 2),
+        "source_files": source_files,
+        "target_failing_before": len(prep.baseline.failing),
+    }
+    out = Path(settings.cache_dir) / "validation" / f"{task.id}.json"
+    out.write_text(json.dumps(result, indent=2))
+    remove_worktree(bare, prep.sandbox.root)
+    return result
