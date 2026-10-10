@@ -4,7 +4,7 @@
 
 | Date (UTC) | Link | What it shows |
 |---|---|---|
-| 2026-10-10 23:45 (decoded from the post id; 00:45 on 11 Oct local time) | https://x.com/Jemii_aHH/status/2109067787859607948 | a post by the builder (link supplied by the builder; its text was not checked, so what it shows is not described here) |
+| 2026-10-10 23:45 (decoded from the post id; 00:45 on 11 Oct local time) | https://x.com/Jemii_aHH/status/2109067787859607948 | a post tagged #neatHack (the builder confirmed the tag; the assistant could not read the text, so its content is not described here) |
 
 ## Suggested posts, each with a trace or receipt screenshot
 
