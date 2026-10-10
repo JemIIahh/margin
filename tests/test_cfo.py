@@ -54,6 +54,15 @@ def test_rendered_outputs_contain_the_measured_numbers(tmp_path):
         assert needle in prompt
 
 
+def test_the_prompt_says_the_price_is_charged_per_verified_fix_not_per_job_attempted(tmp_path):
+    prompt = render_ari_prompt({"C": {
+        "solve_rate": 0.75, "cost_per_job_p50": 0.09, "cost_per_job_p90": 0.14, "cost_per_verified_fix": 0.13,
+        "avg_price": 0.34, "revenue_per_job": 0.26,
+    }})
+    assert "price per job" not in prompt
+    assert "$0.34 per verified fix" in prompt and "only when the fix verifies" in prompt and "$0.26 per job attempted" in prompt
+
+
 def test_cfo_inputs_command_writes_the_three_files(tmp_path):
     ledger = seeded(tmp_path)
     flat = tmp_path / "flat.json"
