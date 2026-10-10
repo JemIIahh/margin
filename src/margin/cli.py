@@ -46,6 +46,38 @@ def cmd_tasks_validate(args: argparse.Namespace) -> int:
     return 1 if failures else 0
 
 
+def cmd_bench(args: argparse.Namespace) -> int:
+    from margin.bench.runner import BudgetExceeded, run_batch
+
+    settings = Settings.from_env()
+    tasks = load_tasks(_tasks_path(args, settings))
+    chosen = [t for t in tasks if args.split == "all" or t.split == args.split]
+    try:
+        ids = run_batch(
+            chosen, args.arm, settings, version=args.version, tasks_file=args.tasks_file,
+            only_missing=args.only_missing,
+        )
+    except BudgetExceeded as exc:
+        print(f"stopped: {exc}")
+        return 2
+    print(f"{len(ids)} runs recorded in {settings.ledger_path}")
+    return 0
+
+
+def cmd_calibrate_flat(args: argparse.Namespace) -> int:
+    import json
+
+    from margin.bench.report import calibrate_flat_price
+    from margin.ledger import Ledger
+
+    settings = Settings.from_env()
+    result = calibrate_flat_price(Ledger(settings.ledger_path).latest("A"), settings.target_markup)
+    path = settings.root / "bench" / "flat_price.json"
+    path.write_text(json.dumps(result, indent=2) + "\n")
+    print(f"flat price ${result['flat_price_usd']:.4f} from {result['n']} calibration runs -> {path}")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="margin")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -64,6 +96,16 @@ def build_parser() -> argparse.ArgumentParser:
     validate.add_argument("--ids", nargs="*", default=None)
     validate.add_argument("--tasks-file", default=None)
     validate.set_defaults(func=cmd_tasks_validate)
+    bench = sub.add_parser("bench", help="run one arm over many tasks")
+    bench.add_argument("--arm", required=True, choices=["A", "B", "C"])
+    bench.add_argument("--split", default="all", choices=["all", "calibration", "evaluation"])
+    bench.add_argument("--version", default="v1")
+    bench.add_argument("--tasks-file", default=None)
+    bench.add_argument("--only-missing", action="store_true")
+    bench.set_defaults(func=cmd_bench)
+
+    flat = sub.add_parser("calibrate-flat", help="set the flat price from arm A calibration costs")
+    flat.set_defaults(func=cmd_calibrate_flat)
     return parser
 
 

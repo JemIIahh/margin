@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import time
+import uuid
 from pathlib import Path
 from typing import Any
 
@@ -23,7 +24,7 @@ from margin.verify import Verdict, final_verdict
 
 
 def new_run_id(task_id: str, arm: str) -> str:
-    return f"{task_id}-{arm}-{time.strftime('%Y%m%d-%H%M%S')}"
+    return f"{task_id}-{arm}-{time.strftime('%Y%m%d-%H%M%S')}-{uuid.uuid4().hex[:4]}"
 
 
 @span(kind="WORKFLOW", name="margin.run")

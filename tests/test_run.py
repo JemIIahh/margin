@@ -69,3 +69,10 @@ def test_tampering_ends_the_run_as_unsolved_without_crashing(tmp_path, monkeypat
     )
     assert not result.solved
     assert "tampering" in result.verdict_reason and "tampering" in result.abort_reason
+
+
+def test_run_ids_do_not_collide_within_one_second():
+    from margin.run import new_run_id
+
+    ids = {new_run_id("t", "A") for _ in range(50)}
+    assert len(ids) == 50

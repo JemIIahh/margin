@@ -18,3 +18,10 @@ def test_tasks_validate_subcommand_parses_ids():
     args = build_parser().parse_args(["tasks", "validate", "--ids", "a", "b"])
     assert args.ids == ["a", "b"] and args.tasks_file is None
     assert build_parser().parse_args(["tasks", "validate"]).ids is None
+
+
+def test_bench_and_calibrate_flat_subcommands_parse():
+    args = build_parser().parse_args(["bench", "--arm", "A", "--split", "calibration", "--only-missing"])
+    assert (args.arm, args.split, args.version, args.only_missing) == ("A", "calibration", "v1", True)
+    assert build_parser().parse_args(["bench", "--arm", "B"]).split == "all"
+    assert build_parser().parse_args(["calibrate-flat"]).command == "calibrate-flat"
