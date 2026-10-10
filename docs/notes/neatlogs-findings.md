@@ -35,10 +35,18 @@ read back from neatlogs through its authenticated MCP endpoint (`get_trace_conte
   tags (span fields: id, name, type, status, duration, parent, input, output), so whether they are real, filterable tags is
   still a dashboard question. The selective read (`span_names`) is disabled by neatlogs ("not_enabled").
 
-## Not verified from the API (needs a look at the dashboard)
-- Whether the custom `margin.*` attributes (for example `margin.spend_usd`, `margin.cost_usd`, `margin.rung`) appear on the spans:
-  `get_trace_context` only returns status, model, token counts, tool name and input/output.
-- Whether the trace tags (`arm:hello`, `version:v0`) can be filtered in the dashboard.
+## Checked in the dashboard by the builder (2026-10-10, trace `2ebc64ec…`, arm B `sqlparse-772`)
+- Trace tags are real: the tag control on the trace page lists `arm:B`, `split:calibration`, `task:sqlparse-772` and
+  `version:v2-graph`.
+- The step tree renders as designed: `margin.run` (WORKFLOW) with `turn-N` (AGENT) spans, a `claude-haiku` (LLM) span under
+  each turn with its token count (for example 3,234 tok on turn 0), and the tool calls (`read_file`, `search_code`,
+  `run_tests`) as TOOL spans.
+- The home page shows spend $0.00, because neatlogs does not price the proxy's `claude-haiku`; the cost story is the ledger.
+
+## Not verified
+- Whether the custom `margin.*` span attributes (`margin.cost_usd`, `margin.turn`, `margin.rung`, ...) are shown anywhere in the
+  dashboard: the read-back API returns no attributes, and the span-detail ("i") panel was not opened. Nothing in the results
+  depends on it, because costs and governor decisions come from the ledger and receipts.
 - The Claude Code MCP connection (`claude mcp add ...`, plan Steps 7 and 8) was not made, because it would store the key in the
   Claude configuration. Reading traces through the HTTP endpoint above works without it.
 
