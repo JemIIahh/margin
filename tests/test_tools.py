@@ -96,7 +96,7 @@ def test_long_output_is_clipped(sandbox, tmp_path):
 
 @pytest.mark.parametrize(
     "path", ["tests/conftest.py", "tests/test_new.py", "pytest.ini", "tox.ini", "setup.cfg", "pyproject.toml",
-             "sitecustomize.py", "pkg/extra.pth"],
+             "sitecustomize.py", "pkg/extra.pth", "TESTS/new.py", "Conftest.PY"],
 )
 def test_test_files_and_test_infrastructure_are_read_only(sandbox, tmp_path, path):
     ex = make_executor(sandbox, tmp_path)
@@ -166,3 +166,12 @@ def test_a_failing_git_command_becomes_an_error_result_not_a_crash(sandbox, tmp_
     monkeypatch.setattr(sandbox, "git_diff", broken)
     out = ex.execute("git_diff", {})
     assert out.is_error and "git" in out.text
+
+
+def test_a_case_variant_of_a_protected_file_is_refused_and_leaves_it_unchanged(sandbox, tmp_path):
+    """macOS is case-insensitive: tests/TEST_MATHY.py is the same file as tests/test_mathy.py."""
+    ex = make_executor(sandbox, tmp_path)
+    before = (sandbox.root / "tests" / "test_mathy.py").read_text()
+    out = ex.execute("edit_file", {"path": "tests/TEST_MATHY.py", "old": "== 3", "new": "== -1"})
+    assert out.is_error and "protected" in out.text
+    assert (sandbox.root / "tests" / "test_mathy.py").read_text() == before
