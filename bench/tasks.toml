@@ -1,0 +1,225 @@
+# The 16 benchmark tasks. Generated from mined, probed and validated bug-fix commits; see docs/notes/task-curation.md.
+
+[[task]]
+id = "cachetools-423"
+split = "calibration"
+repo = "https://github.com/tkem/cachetools"
+base_commit = "eadb91cc9d54a57d6738386bc5c575ff3c7d22ec"
+fix_commit = "bcf9e8176ebe16da58751fce971c98ffe045ede1"
+issue_url = "https://github.com/tkem/cachetools/issues/423"
+issue_file = "bench/issues/cachetools-423.md"
+target_tests = ["tests/test_rr.py::RRCacheTest::test_rr_popitem_empty_custom_choice"]
+test_files = ["tests/test_rr.py"]
+test_args = ["tests"]
+deps = ["pytest"]
+pythonpath = ["src"]
+
+[[task]]
+id = "toolz-602"
+split = "calibration"
+repo = "https://github.com/pytoolz/toolz"
+base_commit = "1fb2b9f1b69ab664a264944f4eafc290acce127d"
+fix_commit = "5a7e078c941c990dcaca53ac6920e5d5c0b1475f"
+issue_url = "https://github.com/pytoolz/toolz/issues/602"
+issue_file = "bench/issues/toolz-602.md"
+target_tests = ["toolz/tests/test_itertoolz.py::test_partition_all"]
+test_files = ["toolz/tests/test_itertoolz.py"]
+test_args = ["toolz"]
+deps = ["pytest"]
+pythonpath = ["."]
+
+[[task]]
+id = "moreitertools-1304"
+split = "calibration"
+repo = "https://github.com/more-itertools/more-itertools"
+base_commit = "790bb0bb2c03e7a07282e5f16f4b1fde35b8fcf5"
+fix_commit = "f89d7a3331ba6b5421273e556c0a738e3dd1dd35"
+issue_url = "https://github.com/more-itertools/more-itertools/issues/1304"
+issue_file = "bench/issues/moreitertools-1304.md"
+target_tests = ["tests/test_more.py::IchunkedTests::test_negative", "tests/test_more.py::IchunkedTests::test_zero_nonempty"]
+test_files = ["tests/test_more.py"]
+test_args = ["tests"]
+deps = ["pytest"]
+pythonpath = ["."]
+
+[[task]]
+id = "sqlparse-772"
+split = "calibration"
+repo = "https://github.com/andialbrecht/sqlparse"
+base_commit = "5a24e36d19ae10e9663d379fd981b4a9c8d39f6d"
+fix_commit = "8b0342730b2e53dcc7887e5b4563d479444ec0ba"
+issue_url = "https://github.com/andialbrecht/sqlparse/issues/772"
+issue_file = "bench/issues/sqlparse-772.md"
+target_tests = ["tests/test_format.py::TestFormat::test_strip_comments_multi", "tests/test_format.py::TestFormat::test_strip_comments_preserves_whitespace"]
+test_files = ["tests/test_format.py", "tests/test_grouping.py"]
+test_args = ["tests"]
+deps = ["pytest"]
+pythonpath = ["."]
+
+[[task]]
+id = "moreitertools-1308"
+split = "evaluation"
+repo = "https://github.com/more-itertools/more-itertools"
+base_commit = "1ea82a711c69f590054987b5cb194157f8ce8ac4"
+fix_commit = "67fcf640477c78605580f5ee703a54c73c1e7a8a"
+issue_url = "https://github.com/more-itertools/more-itertools/issues/1308"
+issue_file = "bench/issues/moreitertools-1308.md"
+target_tests = ["tests/test_more.py::BucketTests::test_falsey_validator_is_honoured"]
+test_files = ["tests/test_more.py"]
+test_args = ["tests"]
+deps = ["pytest"]
+pythonpath = ["."]
+
+[[task]]
+id = "moreitertools-1284"
+split = "evaluation"
+repo = "https://github.com/more-itertools/more-itertools"
+base_commit = "b2f3aff7633057d234ec9186c18a53f4df306d08"
+fix_commit = "2b8d5cddce4ea01f88a973551cd50479cf5fa45f"
+issue_url = "https://github.com/more-itertools/more-itertools/issues/1284"
+issue_file = "bench/issues/moreitertools-1284.md"
+target_tests = ["tests/test_more.py::BucketTests::test_getitem_miss_does_not_add_key", "tests/test_more.py::BucketTests::test_in_does_not_add_key", "tests/test_more.py::BucketTests::test_in_does_not_add_key_with_validator", "tests/test_more.py::BucketTests::test_keys_are_only_those_seen"]
+test_files = ["tests/test_more.py"]
+test_args = ["tests"]
+deps = ["pytest"]
+pythonpath = ["."]
+
+[[task]]
+id = "moreitertools-1214"
+split = "evaluation"
+repo = "https://github.com/more-itertools/more-itertools"
+base_commit = "da37f9de442b69fbcaa9f54fb042c2a6999473a6"
+fix_commit = "069b30002a985c02f1ab18409290a699fd649376"
+issue_url = "https://github.com/more-itertools/more-itertools/issues/1214"
+issue_file = "bench/issues/moreitertools-1214.md"
+target_tests = ["tests/test_more.py::NumericRangeTests::test_eq"]
+test_files = ["tests/test_more.py"]
+test_args = ["tests"]
+deps = ["pytest"]
+pythonpath = ["."]
+
+[[task]]
+id = "sqlparse-826"
+split = "evaluation"
+repo = "https://github.com/andialbrecht/sqlparse"
+base_commit = "acd8e5817b5be5f9b9a7b159c1bacc45179f4e44"
+fix_commit = "5ca50a2ee9b39e9efeea33e01f132d628144fb69"
+issue_url = "https://github.com/andialbrecht/sqlparse/issues/826"
+issue_file = "bench/issues/sqlparse-826.md"
+target_tests = ["tests/test_split.py::test_split_begin_transaction", "tests/test_split.py::test_split_begin_transaction_formatted"]
+test_files = ["tests/test_split.py"]
+test_args = ["tests"]
+deps = ["pytest"]
+pythonpath = ["."]
+
+[[task]]
+id = "sqlparse-332"
+split = "evaluation"
+repo = "https://github.com/andialbrecht/sqlparse"
+base_commit = "df8e28495a87954a9d52de70c33ef7225c53b28f"
+fix_commit = "f66d12c245412f28c58f045b646eb53c0e691b8b"
+issue_url = "https://github.com/andialbrecht/sqlparse/issues/332"
+issue_file = "bench/issues/sqlparse-332.md"
+target_tests = ["tests/test_parse.py::test_get_real_name_multi_part_dotted"]
+test_files = ["tests/test_parse.py"]
+test_args = ["tests"]
+deps = ["pytest"]
+pythonpath = ["."]
+
+[[task]]
+id = "tomlkit-261"
+split = "evaluation"
+repo = "https://github.com/python-poetry/tomlkit"
+base_commit = "c46482be9b036c935a193f553c258e4e6e8e3abe"
+fix_commit = "de68fd06eef61aab0d50d69fb589a43f00a046bf"
+issue_url = "https://github.com/python-poetry/tomlkit/issues/261"
+issue_file = "bench/issues/tomlkit-261.md"
+target_tests = ["tests/test_toml_document.py::test_subtable_of_aot_element_after_other_table"]
+test_files = ["tests/test_toml_document.py"]
+test_args = ["tests"]
+deps = ["pytest", "pyyaml"]
+pythonpath = ["."]
+
+[[task]]
+id = "tomlkit-619"
+split = "evaluation"
+repo = "https://github.com/python-poetry/tomlkit"
+base_commit = "8c959b51c7da2734662af759a7c9f95e9a78060a"
+fix_commit = "49d6efa980fedb321f16371a4b05abd2a449f775"
+issue_url = "https://github.com/python-poetry/tomlkit/issues/619"
+issue_file = "bench/issues/tomlkit-619.md"
+target_tests = ["tests/test_items.py::test_datetimes_behave_like_datetimes_fold", "tests/test_items.py::test_times_behave_like_times_fold"]
+test_files = ["tests/test_items.py"]
+test_args = ["tests"]
+deps = ["pytest", "pyyaml"]
+pythonpath = ["."]
+
+[[task]]
+id = "tabulate-241"
+split = "evaluation"
+repo = "https://github.com/astanin/python-tabulate"
+base_commit = "46c9fe38d36e1f185271884ace2e80415389216c"
+fix_commit = "e6a24aa6e00ca8ce9a1987f28c11ca08c6f19383"
+issue_url = "https://github.com/astanin/python-tabulate/issues/241"
+issue_file = "bench/issues/tabulate-241.md"
+target_tests = ["test/test_regression.py::test_github_escape_pipe_character"]
+test_files = ["test/test_regression.py"]
+test_args = ["test"]
+deps = ["pytest"]
+pythonpath = ["."]
+
+[[task]]
+id = "tabulate-305"
+split = "evaluation"
+repo = "https://github.com/astanin/python-tabulate"
+base_commit = "537d7b03932263062d37a7e747f19a385709b9f7"
+fix_commit = "d29909b4fb17e2bbf62dde8bc730e9f29240155f"
+issue_url = "https://github.com/astanin/python-tabulate/issues/305"
+issue_file = "bench/issues/tabulate-305.md"
+target_tests = ["test/test_textwrapper.py::test_wrap_optional_bool_strs"]
+test_files = ["test/test_textwrapper.py"]
+test_args = ["test"]
+deps = ["pytest"]
+pythonpath = ["."]
+
+[[task]]
+id = "marshmallow-2249"
+split = "evaluation"
+repo = "https://github.com/marshmallow-code/marshmallow"
+base_commit = "ea26aeb08c37c4e4c5bd323689c873d14f13d58d"
+fix_commit = "76bc28ae74e723760d54f097290ba85e717d5fe4"
+issue_url = "https://github.com/marshmallow-code/marshmallow/issues/2249"
+issue_file = "bench/issues/marshmallow-2249.md"
+target_tests = ["tests/test_validate.py::test_url_accepts_valid_file_urls[file:///C:/Users/test/file.txt]", "tests/test_validate.py::test_url_accepts_valid_file_urls[file:///]", "tests/test_validate.py::test_url_accepts_valid_file_urls[file:///home/user/documents/test.pdf]", "tests/test_validate.py::test_url_accepts_valid_file_urls[file:///tmp/test%20file.txt]", "tests/test_validate.py::test_url_accepts_valid_file_urls[file:///tmp/tmp1234]"]
+test_files = ["tests/test_validate.py"]
+test_args = ["tests"]
+deps = ["pytest", "simplejson"]
+pythonpath = ["src"]
+
+[[task]]
+id = "marshmallow-2900"
+split = "evaluation"
+repo = "https://github.com/marshmallow-code/marshmallow"
+base_commit = "fea5428567960f15be0c9a3a4b99c0d9bb63848c"
+fix_commit = "070dde08bad456e743a0d2e1842c142a799a9568"
+issue_url = "https://github.com/marshmallow-code/marshmallow/issues/2900"
+issue_file = "bench/issues/marshmallow-2900.md"
+target_tests = ["tests/test_deserialization.py::TestFieldDeserialization::test_constant_with_required"]
+test_files = ["tests/test_deserialization.py"]
+test_args = ["tests"]
+deps = ["pytest", "simplejson"]
+pythonpath = ["src"]
+
+[[task]]
+id = "mistune-420"
+split = "evaluation"
+repo = "https://github.com/lepture/mistune"
+base_commit = "b5dd9949baf3729a709ef8ae591eab86e72a9e46"
+fix_commit = "1209f3421e5057bb2525c7059c1a38ddf205ef2e"
+issue_url = "https://github.com/lepture/mistune/issues/420"
+issue_file = "bench/issues/mistune-420.md"
+target_tests = ["tests/test_misc.py::TestMiscCases::test_escape_applies_to_custom_renderer"]
+test_files = ["tests/test_misc.py"]
+test_args = ["tests"]
+deps = ["pytest"]
+pythonpath = ["src"]
