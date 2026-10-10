@@ -25,3 +25,8 @@ def test_bench_and_calibrate_flat_subcommands_parse():
     assert (args.arm, args.split, args.version, args.only_missing) == ("A", "calibration", "v1", True)
     assert build_parser().parse_args(["bench", "--arm", "B"]).split == "all"
     assert build_parser().parse_args(["calibrate-flat"]).command == "calibrate-flat"
+
+
+def test_quote_subcommand_parses():
+    args = build_parser().parse_args(["quote", "--task", "t1"])
+    assert args.task == "t1" and args.tasks_file is None

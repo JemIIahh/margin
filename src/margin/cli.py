@@ -78,6 +78,27 @@ def cmd_calibrate_flat(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_quote(args: argparse.Namespace) -> int:
+    from margin.bench.tasks import prepare_run
+    from margin.context import GraphContext
+    from margin.ledger import Ledger
+    from margin.quote import Quoter, extract_features, training_rows
+
+    settings = Settings.from_env()
+    task = find_task(load_tasks(_tasks_path(args, settings)), args.task)
+    prep = prepare_run(task, settings.runs_dir / f"quote-{task.id}", settings)
+    features = extract_features(
+        task.issue_text(settings.root), prep.sandbox.root, prep.baseline_seconds, GraphContext(prep.sandbox.root)
+    )
+    rows = training_rows(Ledger(settings.ledger_path), exclude=task.id)
+    quote = Quoter(rows, prior_cost=settings.default_cost_usd).quote(features)
+    print(
+        f"{task.id}: cost band ${quote.lo:.4f} - ${quote.hi:.4f} (p50 ${quote.p50:.4f}) "
+        f"from {len(rows)} past runs; price ${quote.price(settings.target_markup):.4f}"
+    )
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="margin")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -106,6 +127,10 @@ def build_parser() -> argparse.ArgumentParser:
 
     flat = sub.add_parser("calibrate-flat", help="set the flat price from arm A calibration costs")
     flat.set_defaults(func=cmd_calibrate_flat)
+    quote = sub.add_parser("quote", help="print the price band for a task without running it")
+    quote.add_argument("--task", required=True)
+    quote.add_argument("--tasks-file", default=None)
+    quote.set_defaults(func=cmd_quote)
     return parser
 
 
