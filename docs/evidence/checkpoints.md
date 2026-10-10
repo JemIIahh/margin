@@ -1,8 +1,19 @@
 # Entire checkpoints
 
-**Status: not published.** `push_sessions` is `false` in `.entire/settings.json` and nothing has been pushed.
-The privacy gate (plan Task 20, Step 4) has **not** been run: it needs the builder's own list of strings that must
-never appear publicly, and it must pass before any checkpoint is pushed.
+**Status: not published yet; gate in progress (2026-10-10, evening).** `push_sessions` is `false` in `.entire/settings.json`
+and no checkpoint has left this machine.
+
+## What will be published, and what will not
+
+- **Only the final checkpoint** (the one cited in `EVIDENCE.md`) is published. A checkpoint holds the whole redacted session
+  so far, so one is enough to show the build; the 28 oldest checkpoints, written before redaction was switched on, contain a
+  personal email address and are kept locally under a backup ref namespace and never pushed.
+- **Extra redaction rules are kept out of the repository.** Four more patterns (a personal email domain, a first name, and two
+  account identifiers of a third-party service) live in `.entire/settings.local.json`, which `.entire/.gitignore` excludes, so
+  the strings being hidden are not published by the file that hides them.
+- **One exception is accepted by the builder:** the operating-system user name appears in file paths (`cwd`, `file_path`),
+  which Entire exempts from redaction. It is a short account name, not an email or a full name.
+- The gate's result is recorded in the section "Privacy gate" below once it has been run on the final checkpoint.
 
 ## Preliminary scan (2026-10-10, generic patterns only, read-only)
 
