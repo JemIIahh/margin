@@ -19,6 +19,23 @@ addresses. Before publishing, either configure redaction for those patterns, or 
 that never contained them (plan Step 4 (a) to (c)). A checkpoint's title is also taken from the session prompt, so check
 titles too.
 
+## Redaction configured (2026-10-10), and what it does and does not fix
+
+`.entire/settings.json` now turns on PII redaction (emails, phone numbers) and a custom rule for home-directory paths,
+following Entire's Privacy and Redaction docs. Checked on the first checkpoint written after the change
+(`01M4JVC6NMY6QT82H2DE09GQ47`), counts only:
+
+| Check | Result |
+|---|---|
+| Personal email addresses | none. What remains is code (`@pytest.mark`, `@pytest.fixture`), the allowlisted GitHub `noreply` address, and `noreply@anthropic.com` |
+| Home-directory path | **still present**, in structural JSON fields (`cwd`, `file_path`, `root`). Entire exempts file-path and ID fields from every redaction layer by design, and has no setting to change that |
+
+So the redaction rules protect transcript *text*, but the OS user name still appears in path fields. Whether that matters is the
+builder's decision; if it does, options are a build session run from a neutral account or path, or not publishing those
+checkpoints. Checkpoints written **before** this change (the 22 listed below, and the ones created while it was being tested)
+keep their original content, including personal emails; they must not be pushed as they are. The OpenAI Privacy Filter (names)
+is not available here: it only runs on the older branch backend, and this repository uses the ref backend.
+
 ## Checkpoints for the commits in this repository (local)
 
 | Checkpoint id | Commit | Time (local, 10-10) | Subject |
