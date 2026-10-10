@@ -1,0 +1,39 @@
+# Output of `entire graph stats --repo .`, run on 2026-10-10 over the build sessions of this repository.
+# Only the home-directory prefix was shortened to `~`; every number is as printed.
+# What this measures: Claude Code *build* sessions, not Margin's runtime. In those sessions the graph was barely
+# used (graph-first rate 0%), so the estimate below is ~0. It says nothing about how much graph-scoped context saves
+# Margin's agent; that effect is measured separately as tokens per solved fix, arm A versus arm B (docs/results.md).
+
+entire graph stats
+  repo:     ~/Desktop/margin
+  sessions: ~/.claude/projects/-Users-ram-Desktop-margin
+  window:   --since 30d · 2 session(s), 2 transcript file(s)
+  covering: 2026-10-10T09:21:22Z → 2026-10-10T10:47:53Z
+
+graph calls: 4 · exploration calls: 181 · graph-first rate: 0% (0/2 sessions)
+
+graph calls by verb
+  verb                      calls    est. tokens
+  init-agents                   2            343
+  doctor                        1             84
+  search                        1            653
+  TOTAL                         4          1,080
+
+exploration calls (what the graph is meant to replace)
+  kind                      calls    est. tokens
+  Read (whole file)            21         67,635
+  Read (line range)            10         71,384
+  Bash grep/find/read         150         32,008
+  TOTAL                       181        171,029
+
+session tokens (billed, read from transcript usage)
+  input 550 · cache write 792,321 · cache read 82,868,623 · output 290,887 · total 83,952,381
+
+ESTIMATED SAVINGS  ~0 tokens
+  credited graph calls: 1 of 4 (search/neighbors/impact only)
+  Model (assumption, not a measurement): each graph locate call (search/neighbors/impact)
+  is credited with the ONE whole-file read it replaced. Counterfactual = on-disk size of
+  the top-hit file that call pointed at (the repo's median tracked-file size when the path
+  cannot be resolved), minus the bytes the graph call actually returned, floored at 0,
+  converted at 4 bytes = 1 token. Real savings depend on what you would actually have read
+  instead; treat this as an estimate, not ground truth.
