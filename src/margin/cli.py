@@ -172,6 +172,33 @@ def cmd_snapshot_ledger(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_cfo_inputs(args: argparse.Namespace) -> int:
+    import json
+
+    from margin.bench.cfo import cfo_inputs, render_ari_prompt, render_inputs_table
+    from margin.ledger import Ledger
+
+    settings = Settings.from_env()
+    flat_path = Path(args.flat or settings.root / "bench" / "flat_price.json")
+    if not flat_path.exists():
+        print(f"{flat_path} is missing; run `uv run margin calibrate-flat` after the arm A calibration runs")
+        return 1
+    flat = json.loads(flat_path.read_text())["flat_price_usd"]
+    ledger = Ledger(Path(args.ledger) if args.ledger else settings.root / "docs" / "evidence" / "ledger.jsonl")
+    inputs = cfo_inputs(ledger, flat)
+    if not inputs:
+        print(f"no evaluation runs in {ledger.path}; run the benchmark and `uv run margin snapshot-ledger` first")
+        return 1
+    out = Path(args.out) if args.out else settings.root / "docs" / "business"
+    out.mkdir(parents=True, exist_ok=True)
+    (out / "inputs.json").write_text(json.dumps(inputs, indent=2) + "\n")
+    (out / "inputs.md").write_text(render_inputs_table(inputs) + "\n")
+    (out / "ari-prompt.md").write_text(render_ari_prompt(inputs) + "\n")
+    print(render_inputs_table(inputs))
+    print(f"wrote {out}/inputs.json, inputs.md and ari-prompt.md")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="margin")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -218,6 +245,11 @@ def build_parser() -> argparse.ArgumentParser:
 
     snap = sub.add_parser("snapshot-ledger", help="copy runs/ledger.jsonl to docs/evidence/ledger.jsonl")
     snap.set_defaults(func=cmd_snapshot_ledger)
+    cfo = sub.add_parser("cfo-inputs", help="write the measured numbers and prompt for the cfo.ai plan")
+    cfo.add_argument("--ledger", default=None)
+    cfo.add_argument("--flat", default=None)
+    cfo.add_argument("--out", default=None)
+    cfo.set_defaults(func=cmd_cfo_inputs)
     return parser
 
 
