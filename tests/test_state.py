@@ -20,7 +20,8 @@ def test_truncated_last_event_is_skipped(tmp_path):
     s.log("a")
     with s.events_path.open("a") as f:
         f.write('{"type": "b", "x":')
-    assert [e["type"] for e in s.events()] == ["a"]
+    with pytest.warns(UserWarning, match="unreadable event line"):
+        assert [e["type"] for e in s.events()] == ["a"]
 
 
 def test_usage_events_restore_the_meter(tmp_path):
@@ -55,3 +56,16 @@ def test_tampered_checkpoint_is_rejected(tmp_path):
     s.checkpoint_path.write_text(json.dumps(data))
     with pytest.raises(CorruptCheckpoint):
         s.load_checkpoint()
+
+
+def test_an_event_logged_after_a_torn_line_is_not_lost_and_the_torn_line_is_reported(tmp_path):
+    import pytest
+
+    state = RunState(tmp_path / "s")
+    state.log("first")
+    with state.events_path.open("a") as f:
+        f.write('{"t": 1, "type": "mo')               # killed mid-write
+    state.log("model_usage", model="m", usage={})      # this is a cost event: losing it would lose paid spend
+    with pytest.warns(UserWarning):
+        types = [e["type"] for e in state.events()]
+    assert types == ["first", "model_usage"]

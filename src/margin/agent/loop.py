@@ -26,7 +26,17 @@ class AgentResult:
     messages: list = field(default_factory=list)
 
 
-def call_with_retry(client: Any, params: dict, *, state: RunState, faults: Any, sleep: Callable, retries: int = 4):
+def _retry_after(exc: BaseException) -> float | None:
+    """Seconds the API asked us to wait, if it said so as a number."""
+    headers = getattr(getattr(exc, "response", None), "headers", None)
+    try:
+        return float(headers.get("retry-after")) if headers is not None else None
+    except (TypeError, ValueError):
+        return None  # absent, or an HTTP date we do not parse
+
+
+def call_with_retry(client: Any, params: dict, *, state: RunState, faults: Any, sleep: Callable, retries: int = 6):
+    """Retry transient failures with backoff of 1, 2, 4, ... 32 s (a minute of overload), honouring retry-after."""
     for attempt in range(retries + 1):
         try:
             if faults is not None:
@@ -35,7 +45,10 @@ def call_with_retry(client: Any, params: dict, *, state: RunState, faults: Any, 
         except Exception as exc:
             if attempt == retries or not is_transient(exc):
                 raise
-            delay = min(2**attempt, 8)
+            delay = min(2**attempt, 32)
+            asked = _retry_after(exc)
+            if asked is not None:
+                delay = min(max(delay, asked), 120)
             state.log("retry", attempt=attempt + 1, error=type(exc).__name__, delay=delay)
             record_failure("failed:model_call", f"{type(exc).__name__}: {exc}")
             with trace("retry", kind="GUARDRAIL", **{"margin.attempt": attempt + 1, "margin.delay_s": delay}):
@@ -75,10 +88,10 @@ def run_agent(
     if resume:
         messages, turn = resume["messages"], resume["turn"]
         model, effort = resume["model"], resume["effort"]
-        governor.restore(resume["rung"])
         rung_events = list(resume["extra"].get("rung_events", []))
         narrow_until = resume["extra"].get("narrow_until")
         executor.progress.restore(resume["extra"].get("progress", {}))
+        governor.restore(resume["rung"], resume["extra"].get("governor_seen", 0))
     else:
         messages, turn = [{"role": "user", "content": first_prompt}], 0
     last_prompt_tokens = max(1, len(str(messages)) // 3)
@@ -160,18 +173,27 @@ def run_agent(
                 results.append(item)
             messages.append({"role": "user", "content": results})
         else:  # max_tokens or anything unexpected: ask the model to carry on
-            messages.append(
-                {
-                    "role": "user",
-                    "content": "Your last reply was cut off. Continue with tool calls, or finish with one sentence.",
-                }
-            )
+            notice = "Your last reply was cut off. Continue with tool calls, or finish with one sentence."
+            unanswered = [b for b in response.content if b.type == "tool_use"]
+            if unanswered:
+                # A tool call cut off mid-way is never run, but the API rejects a request whose tool_use has no
+                # tool_result, so every one is answered with an error before the nudge.
+                answers = [
+                    {
+                        "type": "tool_result", "tool_use_id": b.id, "is_error": True,
+                        "content": "This tool call was cut off by the output limit and was not run. Send it again, smaller.",
+                    }
+                    for b in unanswered
+                ]
+                messages.append({"role": "user", "content": [*answers, {"type": "text", "text": notice}]})
+            else:
+                messages.append({"role": "user", "content": notice})
 
         state.save_checkpoint(
             turn=turn, messages=messages, model=model, effort=effort, rung=governor.rung.name,
             extra={
                 "rung_events": rung_events, "narrow_until": narrow_until,
-                "progress": executor.progress.to_dict(),
+                "progress": executor.progress.to_dict(), "governor_seen": getattr(governor, "seen_progress", 0),
             },
         )
         if after_turn_hook is not None:

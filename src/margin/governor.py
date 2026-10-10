@@ -27,7 +27,7 @@ class NullGovernor:
     def check(self, spend: float, est_next: float, progress_events: int) -> Decision:
         return Decision(Rung.CONTINUE, False)
 
-    def restore(self, rung_name: str) -> None:
+    def restore(self, rung_name: str, seen_progress: int = 0) -> None:
         return None
 
 
@@ -39,8 +39,13 @@ class Governor:
         self.rung = Rung.CONTINUE
         self._seen_progress = 0
 
-    def restore(self, rung_name: str) -> None:
+    @property
+    def seen_progress(self) -> int:
+        return self._seen_progress
+
+    def restore(self, rung_name: str, seen_progress: int = 0) -> None:
         self.rung = Rung[rung_name]
+        self._seen_progress = seen_progress  # progress already accounted for before the checkpoint is not new
 
     def check(self, spend: float, est_next: float, progress_events: int) -> Decision:
         progressed = progress_events > self._seen_progress

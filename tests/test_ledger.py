@@ -76,3 +76,16 @@ def test_receipt_for_flat_priced_failure():
     assert "none (flat price)" in text
     assert "not verified" in text
     assert "over budget" in text
+
+
+def test_a_record_appended_after_a_torn_line_is_not_lost(tmp_path):
+    import pytest
+
+    ledger = Ledger(tmp_path / "l.jsonl")
+    ledger.append(rec(run_id="r1"))
+    with ledger.path.open("a") as f:
+        f.write('{"run_id": "r2", "task_')            # the process was killed mid-write: no newline
+    ledger.append(rec(run_id="r3"))
+    with pytest.warns(UserWarning):
+        rows = ledger.rows()
+    assert [r.run_id for r in rows] == ["r1", "r3"]

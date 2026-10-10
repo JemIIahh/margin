@@ -122,3 +122,34 @@ def test_the_timeout_fallback_does_not_flag_every_untested_test_as_missing(sandb
     ex.baseline = Baseline(ex.baseline.failing, ex.baseline.flaky, passing=frozenset({"tests.test_mathy::test_other"}))
     out = ex.execute("run_tests", {})                          # falls back to the target tests only
     assert "test_other" not in out.text and "Target tests: 1 failing of 1" in out.text
+
+
+def test_progress_is_measured_against_all_targets_failing_and_green_runs_keep_counting():
+    from margin.agent.tools import ProgressTracker
+
+    t = ProgressTracker(initial_failing=2)       # validation guarantees every target fails at the base commit
+    t.note_tests(2)
+    assert t.events == 0                          # nothing improved
+    t.note_tests(1)
+    assert t.events == 1
+    t.note_tests(0)
+    assert t.events == 2
+    t.note_tests(0)
+    assert t.events == 3                          # still green: a finished fix is not "no progress"
+    legacy = ProgressTracker()                    # without the target count the first run is a baseline
+    legacy.note_tests(1)
+    assert legacy.events == 0
+
+
+def test_a_first_run_that_already_passes_counts_as_progress(sandbox, tmp_path):
+    ex = make_executor(sandbox, tmp_path)
+    ex.execute("edit_file", {"path": "pkg/mathy.py", "old": "a - b", "new": "a + b"})
+    before = ex.progress.events
+    ex.execute("run_tests", {})
+    assert ex.progress.events == before + 1
+
+
+def test_read_file_keeps_its_hint_to_use_line_ranges_after_clipping(sandbox, tmp_path):
+    sandbox.write_file("big.txt", "line of text\n" * 6000)
+    out = make_executor(sandbox, tmp_path).execute("read_file", {"path": "big.txt"})
+    assert "start_line" in out.text and "[output truncated]" not in out.text

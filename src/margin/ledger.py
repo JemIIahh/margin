@@ -6,6 +6,8 @@ import warnings
 from dataclasses import dataclass, field, fields
 from pathlib import Path
 
+from margin.jsonl import append_line
+
 
 @dataclass
 class RunRecord:
@@ -52,10 +54,7 @@ class Ledger:
         self.path = Path(path)
 
     def append(self, rec: RunRecord) -> None:
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        with self.path.open("a", encoding="utf-8") as f:
-            f.write(json.dumps(rec.to_dict(), sort_keys=True) + "\n")
-            f.flush()
+        append_line(self.path, json.dumps(rec.to_dict(), sort_keys=True))
 
     def rows(self, arm: str | None = None) -> list[RunRecord]:
         if not self.path.exists():

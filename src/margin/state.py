@@ -5,9 +5,11 @@ import hashlib
 import json
 import os
 import time
+import warnings
 from pathlib import Path
 from typing import Any
 
+from margin.jsonl import append_line
 from margin.pricing import SpendMeter, Usage
 
 
@@ -29,19 +31,18 @@ class RunState:
 
     def log(self, event: str, **data: Any) -> None:
         line = {"t": round(time.time(), 3), "type": event, **data}
-        with self.events_path.open("a", encoding="utf-8") as f:
-            f.write(json.dumps(line, sort_keys=True, default=str) + "\n")
-            f.flush()
+        append_line(self.events_path, json.dumps(line, sort_keys=True, default=str))
 
     def events(self, event: str | None = None) -> list[dict]:
         if not self.events_path.exists():
             return []
         out = []
-        for line in self.events_path.read_text(encoding="utf-8").splitlines():
+        for n, line in enumerate(self.events_path.read_text(encoding="utf-8").splitlines(), start=1):
             try:
                 row = json.loads(line)
             except json.JSONDecodeError:
-                continue  # a killed process can leave a partial last line
+                warnings.warn(f"{self.events_path}:{n}: skipped an unreadable event line", stacklevel=2)
+                continue  # a killed process can leave a partial line
             if event is None or row.get("type") == event:
                 out.append(row)
         return out

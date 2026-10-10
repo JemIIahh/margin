@@ -157,3 +157,47 @@ def test_resume_after_a_crash_matches_an_uninterrupted_run(tmp_path):
     resumed, *_ = go(tmp_path, script()[1:], resume=checkpoint, meter=meter, state=state)
     assert resumed.messages == full.messages
     assert meter.total_usd == pytest.approx(full_meter.total_usd)
+
+
+def test_a_reply_cut_off_mid_tool_call_gets_an_error_result_for_every_tool_use(tmp_path):
+    """The API rejects a request whose tool_use has no tool_result, so a cut-off call must be answered, not skipped."""
+    ex = FakeExecutor()
+    client = ScriptedClient(
+        [reply([text("writing"), tool_use("t1", "write_file", {"path": "a.py"})], stop="max_tokens"), reply([text("done")])]
+    )
+    result = run_agent(
+        first_prompt="F", arm="A", client=client, meter=SpendMeter(PRICES), governor=NullGovernor(), executor=ex,
+        state=RunState(tmp_path / "r"), prices=PRICES, settings=Settings(), sleep=lambda s: None,
+    )
+    assert result.stop == "end_turn" and ex.calls == []        # the half-written call is never run
+    last = client.calls[1]["messages"][-1]["content"]
+    assert last[0]["type"] == "tool_result" and last[0]["tool_use_id"] == "t1" and last[0]["is_error"] is True
+    assert last[-1]["type"] == "text" and "cut off" in last[-1]["text"]
+
+
+def test_the_retry_window_outlasts_a_minute_of_overload(tmp_path):
+    replies = [TransientModelError("529")] * 6 + [reply([text("ok")])]
+    result, _client, _, _state, sleeps = go(tmp_path, replies)
+    assert result.stop == "end_turn" and sleeps == [1, 2, 4, 8, 16, 32]
+
+
+def test_retry_after_is_honoured_ignored_when_unreadable_and_capped(tmp_path):
+    from types import SimpleNamespace
+
+    def failing(value):
+        err = TransientModelError("429")
+        err.response = SimpleNamespace(headers={"retry-after": value})
+        return err
+
+    _, _, _, _, sleeps = go(tmp_path / "a", [failing("30"), reply([text("ok")])])
+    assert sleeps == [30]
+    _, _, _, _, sleeps = go(tmp_path / "b", [failing("Wed, 21 Oct 2026 07:28:00 GMT"), reply([text("ok")])])
+    assert sleeps == [1]
+    _, _, _, _, sleeps = go(tmp_path / "c", [failing("100000"), reply([text("ok")])])
+    assert sleeps == [120]
+
+
+def test_the_checkpoint_records_the_governors_progress_counter(tmp_path):
+    replies = [reply([tool_use("t1", "read_file", {"path": "a"})], stop="tool_use"), reply([text("done")])]
+    _, _, _, state, _ = go(tmp_path, replies, governor=Governor(cap_usd=100.0))
+    assert isinstance(state.load_checkpoint()["extra"]["governor_seen"], int)

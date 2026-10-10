@@ -19,11 +19,16 @@ class ToolOutput:
 
 
 class ProgressTracker:
-    """Counts progress events the governor can see: a first applied edit, or fewer failing targets."""
+    """Counts progress events the governor can see: a first applied edit, or fewer failing targets.
 
-    def __init__(self) -> None:
+    `initial_failing` is the number of target tests (validation guarantees they all fail at the base commit), so the
+    first test run is compared with "everything failing". Once the targets pass, every further green run still counts:
+    a finished fix must not be mistaken for a stalled one.
+    """
+
+    def __init__(self, initial_failing: int | None = None) -> None:
         self.events = 0
-        self.best_failing: int | None = None
+        self.best_failing: int | None = initial_failing
         self.patch_applied = False
 
     def note_edit(self) -> None:
@@ -33,9 +38,11 @@ class ProgressTracker:
 
     def note_tests(self, failing_targets: int) -> None:
         if self.best_failing is None:
-            self.best_failing = failing_targets  # the first measurement is a baseline, not progress
+            self.best_failing = failing_targets  # without a known starting count the first measurement is a baseline
         elif failing_targets < self.best_failing:
             self.best_failing = failing_targets
+            self.events += 1
+        elif failing_targets == 0:
             self.events += 1
 
     def to_dict(self) -> dict:
@@ -127,7 +134,7 @@ class ToolExecutor:
         self.graph = graph
         self.faults = faults
         self.state = state
-        self.progress = ProgressTracker()
+        self.progress = ProgressTracker(initial_failing=len(self.target_junit_ids))
         self.last_tests_text = ""
         self._test_runs = 0
 
@@ -166,7 +173,8 @@ class ToolExecutor:
 
     # --- tools -------------------------------------------------------------------
     def _tool_read_file(self, path, start_line=None, end_line=None) -> ToolOutput:
-        return ToolOutput(self.sandbox.read_file(path, start_line, end_line))
+        # leave room for the sandbox's own 'use start_line/end_line' hint under the clip limit
+        return ToolOutput(self.sandbox.read_file(path, start_line, end_line, max_chars=MAX_OUTPUT_CHARS - 100))
 
     def _tool_search_code(self, query) -> ToolOutput:
         if self.graph is not None:

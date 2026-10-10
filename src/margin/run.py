@@ -101,7 +101,7 @@ def execute_run(
     )
     context = _initial_context(graph, issue, sandbox.root, settings, state)
     checkpoint = state.load_checkpoint() if resume else None
-    if checkpoint:
+    if resume:  # even with no checkpoint yet: calls made before the kill were paid for and are in the event log
         state.restore_meter(meter)
     tampered: str | None = None
     try:

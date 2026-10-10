@@ -65,3 +65,14 @@ def test_null_governor_never_intervenes():
     assert d.rung == Rung.CONTINUE and not d.changed
     g.restore("ABORT")
     assert g.rung == Rung.CONTINUE
+
+
+def test_restore_resyncs_the_progress_counter_so_old_progress_is_not_counted_twice():
+    g = Governor(cap_usd=1.0)
+    g.restore("CONTINUE", seen_progress=3)
+    d = g.check(0.62, 0.05, progress_events=3)       # nothing new since the checkpoint
+    assert d.rung == Rung.DOWNGRADE and "no progress" in d.reason
+    fresh = Governor(cap_usd=1.0)
+    fresh.restore("CONTINUE", seen_progress=3)
+    assert fresh.check(0.62, 0.05, progress_events=4).rung == Rung.CONTINUE    # one new event since the checkpoint
+    NullGovernor().restore("ABORT", seen_progress=9)                           # same surface, ignored
