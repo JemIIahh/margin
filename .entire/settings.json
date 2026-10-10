@@ -8,5 +8,17 @@
     "primary": {
       "type": "git-refs"
     }
+  },
+  "redaction": {
+    "pii": {
+      "enabled": true,
+      "email": true,
+      "phone": true,
+      "address": false
+    },
+    "custom_redactions": {
+      "home_path_mac": "/Users/[A-Za-z0-9._-]+",
+      "home_path_linux": "/home/[A-Za-z0-9._-]+"
+    }
   }
 }
