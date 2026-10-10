@@ -6,7 +6,7 @@ import subprocess
 from pathlib import Path
 
 H = Path("/private/tmp/claude-501/-Users-ram-Desktop-margin/428afbc1-7d7e-4b07-bb5a-0e6802f57e73/scratchpad")
-ROOT = Path("/Users/ram/Desktop/margin")
+ROOT = Path("<project root>")
 
 # repo-name -> (slug, id prefix, pythonpath, test_args, deps)
 REPO = {

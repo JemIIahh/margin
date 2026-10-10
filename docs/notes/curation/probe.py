@@ -2,7 +2,7 @@
 # SPECIFIC TO THAT SESSION; adjust HERE/H/ROOT before reusing. See docs/notes/task-curation.md.
 """Stage 2: probe mined candidates with the project's own machinery. Read-only against GitHub (clones only).
 
-Usage: uv run python probe.py <repo-name> [max_candidates]   (run from /Users/ram/Desktop/margin)
+Usage: uv run python probe.py <repo-name> [max_candidates]   (run from <project root>)
 Writes probe/<name>.jsonl, one line per candidate.
 """
 import json
