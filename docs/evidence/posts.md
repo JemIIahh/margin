@@ -1,10 +1,10 @@
 # Building in public (#neatHack)
 
-**No posts recorded yet.** Posting is the builder's action: this file is a dated list of links to the posts, added as they go out.
-Check every screenshot for keys and personal data before posting.
+**Posting is the builder's action:** this file is a dated list of links to the posts, added as they go out. Check every screenshot for keys and personal data before posting.
 
-| Date | Link | What it shows |
+| Date (UTC) | Link | What it shows |
 |---|---|---|
+| 2026-10-10 23:45 (decoded from the post id; 00:45 on 11 Oct local time) | https://x.com/Jemii_aHH/status/2109067787859607948 | a post by the builder (link supplied by the builder; its text was not checked, so what it shows is not described here) |
 
 ## Suggested posts, each with a trace or receipt screenshot
 

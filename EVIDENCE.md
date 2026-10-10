@@ -3,8 +3,8 @@
 Every claim below links to something a judge can open. Numbers come from `docs/evidence/ledger.jsonl`;
 run `make verify` to regenerate `docs/results.md` from it and fail if it differs.
 
-> **Status.** Every link on this page opens. One item depends on the builder: the posts under "You built in public" are added to
-> [`docs/evidence/posts.md`](docs/evidence/posts.md) as they go out, and that list is empty until then.
+> **Status.** Every link on this page opens. The posts under "You built in public" are listed in
+> [`docs/evidence/posts.md`](docs/evidence/posts.md) as the builder publishes them.
 > `tests/test_evidence.py` refuses any leftover placeholder.
 
 ## The agent improved
