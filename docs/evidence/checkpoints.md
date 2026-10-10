@@ -75,3 +75,9 @@ is not available here: it only runs on the older branch backend, and this reposi
 | `01M4JJBRBAVZ8WDY5XKWHT2S09` | `e02faf1` | 10-10 10:30 | chore: scaffold project, settings and telemetry shim |
 
 The same id appears as an `Entire-Checkpoint:` trailer on each commit message.
+
+## Privacy gate (plan Task 20, Step 4)
+
+Run on 2026-10-10 on the newest checkpoint, counting matches without recording the text. Patterns checked, 10 in all: the
+account email address, the email's domain, a first name, two account identifiers of a third-party service, every API key value in
+the local `.env`, any other email-shaped string with a real top-level domain, and the operating-system user name in paths.
