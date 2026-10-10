@@ -82,3 +82,29 @@ Run on 2026-10-10 on the checkpoint to be published, counting matches without re
 email address, the email's domain, a first name, two account identifiers of a third-party service, the two API key values in the
 local `.env` that are long enough to search for, any other email-shaped string with a real top-level domain (all zero), and the
 operating-system user name in paths (present, accepted).
+
+| Check on checkpoint `01M4KJFZ9SS3FGZ96RS2AERSE8` | Matches |
+|---|---|
+| Account email address | 0 |
+| Email domain | 0 |
+| First name | 0 |
+| Third-party account identifiers (2) | 0 |
+| API key values from `.env` (2) | 0 |
+| Other email-shaped strings with a real top-level domain | 0 |
+| Operating-system user name in paths | present (accepted by the builder) |
+
+**Gate passed on 2026-10-10 with 9 checks.** The same check over the 56 commits of `main` found none of the string patterns; the
+operating-system user name appears 4 times (curation scripts and notes), and one third party's home path appears in a quoted
+GitHub issue.
+
+Checkpoints that fail the same checks were not deleted: 51 refs were moved to `refs/backup/entire-checkpoints/` (same commits,
+same ids), so they cannot be pushed by accident and can be restored with
+`git update-ref refs/entire/checkpoints/<xx>/<id> <sha>`.
+
+## To publish (the builder's action)
+
+1. Push the one checkpoint: `git push origin refs/entire/checkpoints/E8/01M4KJFZ9SS3FGZ96RS2AERSE8`
+2. Make the repository public, then connect it on entire.io (Mirror existing GitHub repository, `/gh/JemIIahh/margin`).
+3. Open `https://entire.io/gh/JemIIahh/margin/commit/5ad9776bfaa59fb58de2c6bb05778623b56fd78d` signed out of any private context; Sessions and Changes should
+   both load. Changes can take up to an hour to appear.
+4. Checkpoint id for the submission: `01M4KJFZ9SS3FGZ96RS2AERSE8` (commit `5ad9776`).
