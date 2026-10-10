@@ -78,3 +78,14 @@ def trace(name: str, kind: str, **attrs: Any) -> Iterator[Any]:
         for key, value in attrs.items():
             sp.set_attribute(key, coerce(value))
         yield sp
+
+
+def record_failure(name: str, detail: str, kind: str = "TOOL") -> None:
+    """Emit a span marked as failed for an action that failed and was then recovered from."""
+    if not _enabled:
+        return
+    try:
+        with trace(name, kind=kind, **{"margin.detail": detail}):
+            raise RuntimeError(detail)
+    except RuntimeError:
+        pass

@@ -6,7 +6,7 @@ from typing import Any
 
 from margin.context import GraphError, grep_search
 from margin.sandbox import EditError, PathEscape, Sandbox, SuiteTimeout
-from margin.telemetry import trace
+from margin.telemetry import record_failure, trace
 from margin.verify import Baseline, NoJunit, SuiteRun, run_suite
 
 MAX_OUTPUT_CHARS = 12_000
@@ -155,6 +155,9 @@ class ToolExecutor:
     def _recovery(self, kind: str, detail: str) -> None:
         if self.state is not None:
             self.state.log("recovery", kind=kind, detail=detail)
+        record_failure(f"failed:{kind}", detail)
+        with trace(f"recovery:{kind}", kind="GUARDRAIL", **{"margin.recovery": kind, "margin.detail": detail}):
+            pass
 
     def _guard_write(self, path: str) -> None:
         if self.sandbox.relpath(path) in self.protected:

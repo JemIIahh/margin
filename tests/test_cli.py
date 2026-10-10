@@ -30,3 +30,9 @@ def test_bench_and_calibrate_flat_subcommands_parse():
 def test_quote_subcommand_parses():
     args = build_parser().parse_args(["quote", "--task", "t1"])
     assert args.task == "t1" and args.tasks_file is None
+
+
+def test_resume_subcommand_requires_a_run_id():
+    assert build_parser().parse_args(["resume", "--run-id", "r1"]).run_id == "r1"
+    with pytest.raises(SystemExit):
+        build_parser().parse_args(["resume"])

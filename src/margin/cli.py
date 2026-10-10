@@ -19,10 +19,12 @@ def cmd_run(args: argparse.Namespace) -> int:
     tags = [f"arm:{args.arm}", f"task:{task.id}", f"split:{task.split}", f"version:{args.version}"]
     init_telemetry("margin", tags)  # must precede the first `import anthropic`
     try:
+        from margin.faults import FaultInjector
         from margin.run import execute_run
 
+        faults = FaultInjector(settings.fault) if settings.fault else None
         rec = execute_run(
-            task, args.arm, settings, run_id=args.run_id, version=args.version, trace_tags=tags
+            task, args.arm, settings, run_id=args.run_id, version=args.version, trace_tags=tags, faults=faults
         )
         print(f"{rec.run_id}: solved={rec.solved} cost=${rec.cost_usd:.4f} margin=${rec.margin_usd:.4f}")
         print(f"receipt: {settings.runs_dir / rec.run_id / 'receipt.md'}")
@@ -99,6 +101,36 @@ def cmd_quote(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_resume(args: argparse.Namespace) -> int:
+    import json
+
+    from margin.ledger import Ledger
+
+    settings = Settings.from_env()
+    if any(r.run_id == args.run_id for r in Ledger(settings.ledger_path).rows()):
+        print(f"{args.run_id} already finished; nothing to resume")
+        return 1
+    meta = json.loads((settings.runs_dir / args.run_id / "meta.json").read_text())
+    task = find_task(load_tasks(_tasks_path(args, settings)), meta["task_id"])
+    tags = [
+        f"arm:{meta['arm']}", f"task:{task.id}", f"split:{task.split}", f"version:{meta['version']}", "resumed:true"
+    ]
+    init_telemetry("margin", tags)
+    try:
+        from margin.faults import FaultInjector
+        from margin.run import execute_run
+
+        faults = FaultInjector(settings.fault) if settings.fault else None
+        rec = execute_run(
+            task, meta["arm"], settings, run_id=args.run_id, version=meta["version"], resume=True,
+            faults=faults, trace_tags=tags,
+        )
+        print(f"{rec.run_id}: resumed, solved={rec.solved} cost=${rec.cost_usd:.4f} margin=${rec.margin_usd:.4f}")
+        return 0 if rec.solved else 1
+    finally:
+        shutdown_telemetry()
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="margin")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -131,6 +163,10 @@ def build_parser() -> argparse.ArgumentParser:
     quote.add_argument("--task", required=True)
     quote.add_argument("--tasks-file", default=None)
     quote.set_defaults(func=cmd_quote)
+    resume = sub.add_parser("resume", help="continue a killed run from its checkpoint")
+    resume.add_argument("--run-id", required=True)
+    resume.add_argument("--tasks-file", default=None)
+    resume.set_defaults(func=cmd_resume)
     return parser
 
 

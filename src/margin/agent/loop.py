@@ -13,7 +13,7 @@ from margin.governor import Rung
 from margin.model import build_request, is_transient
 from margin.pricing import PriceTable, SpendMeter, Usage
 from margin.state import RunState
-from margin.telemetry import trace
+from margin.telemetry import record_failure, trace
 
 
 @dataclass
@@ -37,6 +37,9 @@ def call_with_retry(client: Any, params: dict, *, state: RunState, faults: Any, 
                 raise
             delay = min(2**attempt, 8)
             state.log("retry", attempt=attempt + 1, error=type(exc).__name__, delay=delay)
+            record_failure("failed:model_call", f"{type(exc).__name__}: {exc}")
+            with trace("retry", kind="GUARDRAIL", **{"margin.attempt": attempt + 1, "margin.delay_s": delay}):
+                pass
             sleep(delay)
 
 
