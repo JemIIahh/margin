@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import json
-import os
 import shutil
 import subprocess
 import time
@@ -11,6 +10,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from margin.config import Settings
+from margin.procenv import setup_env
 from margin.sandbox import DEFAULT_EXCLUDES, Sandbox
 from margin.verify import Baseline, final_verdict, make_baseline, nodeid_to_junit, run_suite
 
@@ -58,22 +58,8 @@ class Prepared:
     bare: Path
 
 
-# Setup commands (git, uv) handle third-party repositories and dependencies, so they get an allowlisted
-# environment: enough to find tools, caches, proxies and certificates, never an API key.
-_SETUP_ENV_NAMES = {
-    "PATH", "HOME", "LANG", "LC_ALL", "TMPDIR", "USER", "SSL_CERT_FILE", "SSL_CERT_DIR", "REQUESTS_CA_BUNDLE",
-    "HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY", "http_proxy", "https_proxy", "no_proxy",
-}
-
-
-def _setup_env() -> dict[str, str]:
-    env = {k: v for k, v in os.environ.items() if k in _SETUP_ENV_NAMES or k.startswith("UV_")}
-    env["GIT_TERMINAL_PROMPT"] = "0"
-    return env
-
-
 def _run(cmd: list[str]) -> subprocess.CompletedProcess:
-    return subprocess.run(cmd, check=True, capture_output=True, text=True, env=_setup_env())
+    return subprocess.run(cmd, check=True, capture_output=True, text=True, env=setup_env())
 
 
 def ensure_bare_clone(task: Task, cache_dir: Path) -> Path:
@@ -153,10 +139,10 @@ def prepare_run(
 def remove_worktree(bare: Path, work: Path) -> None:
     subprocess.run(
         ["git", "-C", str(bare), "worktree", "remove", "--force", str(work)],
-        capture_output=True, check=False, env=_setup_env(),
+        capture_output=True, check=False, env=setup_env(),
     )
     shutil.rmtree(work, ignore_errors=True)
-    subprocess.run(["git", "-C", str(bare), "worktree", "prune"], capture_output=True, check=False, env=_setup_env())
+    subprocess.run(["git", "-C", str(bare), "worktree", "prune"], capture_output=True, check=False, env=setup_env())
 
 
 def validate_task(

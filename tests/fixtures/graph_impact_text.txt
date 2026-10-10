@@ -1,0 +1,24 @@
+Index: cache-miss (936ms) | Query: 2ms | Total: 938ms
+Impact: PriceTable (src/margin/pricing.py:74) def=74 span=74-94 [class]
+Blast radius: 0 callers (0 direct, 0 transitive), 0 callees, 6 type consumers, 0 data flows, 0 co-change files, 5 siblings.
+Callers (0 direct, 0 transitive; who breaks if behavior changes):
+- none
+Callees (0; what it depends on):
+- none
+Type consumers (6 in, 0 out; USES_TYPE/PARAM_TYPE/RETURNS_TYPE):
+- <- run_agent (src/margin/agent/loop.py:53) [PARAM_TYPE]
+- <- run_agent (src/margin/agent/loop.py:53) [USES_TYPE]
+- <- PriceTable.load (src/margin/pricing.py:79) [RETURNS_TYPE]
+- <- PriceTable.load (src/margin/pricing.py:79) [USES_TYPE]
+- <- SpendMeter.__init__ (src/margin/pricing.py:98) [PARAM_TYPE]
+- <- SpendMeter.__init__ (src/margin/pricing.py:98) [USES_TYPE]
+Data flows (0 in, 0 out):
+- none
+Co-change coupling (0; files that historically change with src/margin/pricing.py):
+- none
+Same-container siblings (5):
+- PriceTable.__init__ (src/margin/pricing.py:75) [member]
+- PriceTable.load (src/margin/pricing.py:79) [member]
+- PriceTable._price (src/margin/pricing.py:83) [member]
+- PriceTable.cost (src/margin/pricing.py:89) [member]
+- PriceTable.estimate_next_call (src/margin/pricing.py:92) [member]

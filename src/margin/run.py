@@ -12,7 +12,7 @@ from margin.agent.prompts import first_prompt
 from margin.agent.tools import ToolExecutor
 from margin.bench.tasks import Task, prepare_run
 from margin.config import Settings
-from margin.context import naive_context
+from margin.context import GraphError, naive_context
 from margin.governor import Governor, NullGovernor
 from margin.ledger import Ledger, RunRecord, render_receipt, settle
 from margin.model import make_model_client
@@ -25,6 +25,15 @@ from margin.verify import Verdict, final_verdict
 
 def new_run_id(task_id: str, arm: str) -> str:
     return f"{task_id}-{arm}-{time.strftime('%Y%m%d-%H%M%S')}-{uuid.uuid4().hex[:4]}"
+
+
+def _initial_context(graph: Any, issue: str, root: Path, settings: Settings, state: RunState) -> str:
+    if graph is not None:
+        try:
+            return graph.search(issue[:2000])
+        except GraphError as exc:
+            state.log("graph_error", error=str(exc))  # fall back rather than lose the run
+    return naive_context(root, settings.naive_context_chars)
 
 
 @span(kind="WORKFLOW", name="margin.run")
@@ -90,7 +99,7 @@ def execute_run(
         target_junit_ids=task.target_junit_ids, test_args=task.test_args, protected_paths=task.test_files,
         issue_text=issue, graph=graph, faults=faults, state=state,
     )
-    context = graph.search(issue[:2000]) if graph is not None else naive_context(sandbox.root, settings.naive_context_chars)
+    context = _initial_context(graph, issue, sandbox.root, settings, state)
     checkpoint = state.load_checkpoint() if resume else None
     if checkpoint:
         state.restore_meter(meter)

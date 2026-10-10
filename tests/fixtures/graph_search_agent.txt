@@ -1,0 +1,76 @@
+Index: cache-miss (972ms) | Query: 121ms | Preselect: 58ms | Total: 1152ms
+Coverage: notice (7 languages/85 files; 1 warning; 0 partial failures)
+- warning W_WORKTREE_SNAPSHOT
+VERIFY: python -m pytest tests/test_pricing.py -k test_estimate_next_call_assumes_warm_cache
+  targets tests/test_pricing.py (from pyproject.toml pytest config + covering test path) tier=narrow
+  NOTE: this command's runner is not installed in this checkout. Run it once; if it fails on the invocation rather than on your code, do NOT go looking for a toolchain — syntax-check the file you changed and stop.
+  run it ONCE after editing; if it fails, fix the code and re-run THIS command.
+  do not build an alternative test harness, hand-assemble a classpath, or re-verify by
+  reverting and reapplying the edit.
+1. src/margin/pricing.py:92-94 PriceTable.estimate_next_call s=32.7 [focus:92]
+    def estimate_next_call(self, model: str, prompt_tokens: int, expected_output_tokens: int) -> float:
+        """Optimistic: the prompt is read from a warm cache, output is the expected length."""
+        return self.cost(model, Usage(output_tokens=expected_output_tokens, cache_read_tokens=prompt_tokens))
+
+src/margin/agent/loop.py:88 *
+    arm: str,
+    client: Any,
+    meter: SpendMeter,
+    governor: Any,
+    executor: Any,
+    state: RunState,
+    prices: PriceTable,
+    settings: Settings,
+    faults: Any = None,
+    resume: dict | None = None,
+    sleep: Callable = time.sleep,
+    after_turn_hook: Callable[[int], None] | None = None,
+) -> AgentResult:
+    model, effort = settings.main_model, settings.main_effort
+    rung_events: list[dict] = []
+    narrow_until: int | None = None
+    if resume:
+        messages, turn = resume["messages"], resume["turn"]
+        model, effort = resume["model"], resume["effort"]
+        governor.restore(resume["rung"])
+        rung_events = list(resume["extra"].get("rung_events", []))
+        narrow_until = resume["extra"].get("narrow_until")
+        executor.progress.restore(resume["extra"].get("progress", {}))
+    else:
+        messages, turn = [{"role": "user", "content": first_prompt}], 0
+    last_prompt_tokens = max(1, len(str(messages)) // 3)
+    tools = tool_schemas(arm)
+
+    def result(stop: str, reason: str | None = None, final_text: str = "") -> AgentResult:
+        return AgentResult(stop, turn, reason, final_text, rung_events, messages)
+
+    while turn < settings.max_turns:
+        est = prices.estimate_next_call(model, last_prompt_tokens, settings.expected_output_tokens)
+
+3. src/margin/pricing.py:61-71 ModelPrice.cost s=31.6 [focus:61]
+    def cost(self, u: Usage) -> float:
+        mult = 1.0
+        if self.long_prompt_threshold is not None and u.prompt_tokens > self.long_prompt_threshold:
+            mult = self.long_prompt_multiplier
+        raw = (
+            u.input_tokens * self.input
+            + u.output_tokens * self.output
+            + u.cache_write_tokens * self.cache_write
+            + u.cache_read_tokens * self.cache_read
+        )
+        return mult * raw / M
+
+4. src/margin/pricing.py:13-17 Usage s=29.9 [focus:13]
+class Usage:
+    input_tokens: int = 0
+    output_tokens: int = 0
+    cache_write_tokens: int = 0
+    cache_read_tokens: int = 0
+
+5. tests/test_pricing.py:44 test_estimate_next_call_assumes_warm_cache (covers) [focus:44]
+    assert est == pytest.approx(100_000 * 0.10 / 1e6 + 4000 * 10 / 1e6)
+SAME-CONCEPT LITERAL "estimate_next_call" — 9 in 4 files repo-wide:
+  docs/superpowers/plans/2026-10-10-margin-implementation.md:543 DOC
+  docs/superpowers/plans/2026-10-10-margin-implementation.md:591 DOC
+  tests/test_pricing.py:42 test_estimate_next_call_assumes_warm_cache CONSUMER
+  tests/test_pricing.py:43 test_estimate_next_call_assumes_warm_cache CONSUMER

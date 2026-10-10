@@ -1,5 +1,9 @@
+import shutil
+import subprocess
 import sys
 from pathlib import Path
+
+import pytest
 
 from fakes import ScriptedClient, reply, text, tool_use
 from margin.ledger import Ledger
@@ -76,3 +80,47 @@ def test_run_ids_do_not_collide_within_one_second():
 
     ids = {new_run_id("t", "A") for _ in range(50)}
     assert len(ids) == 50
+
+
+def test_a_failing_graph_falls_back_to_plain_context_and_is_logged(tmp_path):
+    from margin.config import Settings
+    from margin.context import GraphError
+    from margin.run import _initial_context
+    from margin.state import RunState
+
+    class Broken:
+        def search(self, query):
+            raise GraphError("index unavailable")
+
+    (tmp_path / "pkg").mkdir()
+    (tmp_path / "pkg" / "mod.py").write_text("x = 1\n")
+    state = RunState(tmp_path / "run")
+    context = _initial_context(Broken(), "an issue", tmp_path, Settings(), state)
+    assert "### pkg/mod.py" in context                       # plain whole-file context, not an empty prompt
+    assert state.events("graph_error")[0]["error"] == "index unavailable"
+
+
+@pytest.mark.skipif(shutil.which("entire") is None, reason="entire CLI is not installed")
+def test_arm_b_end_to_end_with_the_real_entire_graph(tmp_path):
+    """Everything but the model is real: the bare clone, the worktree, the entire graph binary, the verifier."""
+    task = make_task(tmp_path)
+    settings = settings_for(tmp_path)
+    client = ScriptedClient(
+        [
+            reply([tool_use("t1", "edit_file", {"path": "pkg/mathy.py", "old": "a - b", "new": "a + b"})], stop="tool_use"),
+            reply([tool_use("t2", "run_tests", {})], stop="tool_use"),
+            reply([text("fixed add")]),
+        ]
+    )
+    rec = execute_run(
+        task, "B", settings, tasks_root=tmp_path, client=client, run_id="r-b", venv_python=Path(sys.executable)
+    )
+    assert rec.solved and rec.arm == "B"
+    assert set(rec.features) == {"issue_tokens", "impact_files", "repo_loc", "baseline_seconds"}
+    first_prompt = client.calls[0]["messages"][0]["content"]
+    assert "Repository context" in first_prompt
+    work = settings.runs_dir / "r-b" / "work"
+    status = subprocess.run(
+        ["git", "-C", str(work), "status", "--short"], capture_output=True, text=True, check=True
+    ).stdout.splitlines()
+    assert [line[3:] for line in status] == ["pkg/mathy.py"]  # only the fix; the graph left no artifacts behind
