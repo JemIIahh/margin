@@ -8,7 +8,7 @@ An issue-fixing agent that treats cost as a control signal: it **quotes** a pric
 
 **Who it is for.** Anyone selling or running agent work who cannot predict what a task will cost: maintainers, bounty hunters, small teams with a backlog, and agent builders pricing their own product.
 
-**Why this stands out.** Agent cost per task is volatile and most vendors fall back to hybrid pricing because they cannot meter or predict it. Mid-run budget awareness is studied; a *pre-run quote learned from the agent's own trace history* is the angle we take. The task (fix an issue, tests as verifier) is deliberately conventional; the economics are the product.
+**Why this stands out.** Agent cost per task is volatile; most agent vendors use hybrid pricing, and measuring and attributing cost is a stated obstacle to pricing per outcome. Mid-run budget awareness is studied; a *pre-run quote learned from the agent's own trace history* is the angle we take. The task (fix an issue, tests as verifier) is deliberately conventional; the economics are the product.
 
 **Success criteria (each must be demonstrable from the public repo):**
 
@@ -26,9 +26,9 @@ An issue-fixing agent that treats cost as a control signal: it **quotes** a pric
 ## 2. Economics (defined once, used everywhere)
 
 - **Revenue per job** = `price` if the verifier passes, else `0` (pay-per-verified-fix).
-- **Cost per job** = tokens × price table (`pricing.toml`) + compute time, summed from the run's own metering.
+- **Cost per job** = model usage priced from `pricing.toml`, summed from the run's own metering. Usage comes from the API response's `usage` fields, with cache-read and cache-write tokens priced at their own rates. Compute time is recorded but not priced (local runs); the cfo.ai plan adds infrastructure cost separately.
 - **Margin per job** = revenue − cost. Failed runs cost money and earn nothing, which is why early abort matters.
-- **Flat price (arms A, B)** = mean cost of the calibration runs × (1 + target markup). Set once, not tuned per task, so the baseline is not a strawman.
+- **Flat price (all arms except C)** = mean cost of arm A's runs on the calibration subset × (1 + target markup). One number for the whole benchmark, set before any optimisation, so the baseline is the "pre-Margin" business and not a strawman.
 - **Quoted price (arm C)** = band upper cost (p90) × (1 + the same target markup).
 - Target markup is one config value (`TARGET_MARKUP`, default 0.5), identical across arms.
 - Model prices live in `pricing.toml` and are verified against Anthropic's current published pricing before the first benchmark run.
@@ -40,20 +40,20 @@ Python 3.12 (neatlogs supports 3.10–3.13; the machine default is 3.14, so the 
 | Unit | Purpose | Depends on |
 |---|---|---|
 | `margin/agent` | Loop: plan → localize → edit → test → repair. Tools: `read_file`, `search`, `graph_*`, `apply_patch`, `run_tests`, `git_diff`. | sandbox, context, governor |
-| `margin/sandbox` | One git worktree per run at the base commit; cached per-repo venv; subprocess calls with hard timeouts. | git, uv |
+| `margin/sandbox` | One git worktree per run at the base commit; cached per-repo venv; subprocess calls with hard timeouts. The agent has no free shell: `run_tests` runs one fixed command, and file tools are confined to the worktree path. Subprocess environments are scrubbed, so no API keys reach repo code. | git, uv |
 | `margin/context` | Adapter over `entire graph` (`search`, `impact`, `neighbors`, `def`) returning compact context packs and impact-size features. | entire CLI |
-| `margin/quote` | Features → price band. kNN over the ledger; band half-width from leave-one-out log-residuals; cold-start fallback to ledger-wide median and p90. | ledger |
+| `margin/quote` | Features → price band. Features: issue length, entire-graph impact size of symbols named in the issue, repo size, baseline test runtime. Prediction `p50` = median cost of the k=3 nearest ledger rows (arm B rows only, the unconstrained graph-scoped runs). Band = `[p50·e^(−q), p50·e^(+q)]`, where `q` is the 90th percentile of `|ln(actual/predicted)|` over leave-one-out residuals; "p90" in this spec means the band's upper bound. Cold start (fewer than 5 rows): ledger-wide median with the same `q`. | ledger |
 | `margin/governor` | Live spend meter and rung policy (below). Emits a decision event for every rung change. | pricing |
-| `margin/verify` | Snapshot failing test ids at base; run after patch; verdict = target tests pass ∧ no new failing ids. | sandbox |
+| `margin/verify` | Snapshot failing test ids at base by running the suite twice; ids that differ between the two runs are marked flaky and excluded. Run after patch; verdict = target tests pass ∧ no new failing non-flaky ids. | sandbox |
 | `margin/state` | Append-only event log plus a step checkpoint (turn index, message digest, spend) under `runs/<id>/`; `resume` replays to the checkpoint. | none |
 | `margin/ledger` | JSONL ledger of runs: features, quote, actual cost, verdict, revenue, margin. Renders the receipt (markdown + one HTML page). | none |
 | `bench/` | Task manifest, runner (global spend guard), report generator, `make verify`. | all |
 
 **Governor rungs.** Budget cap = quote p90 cost. With spend `s` and cap `C`:
 1. `s < 0.6C`: continue on `claude-sonnet-5-5`.
-2. `s ≥ 0.6C` and no progress (failing target tests not decreasing): switch the edit/repair loop to `claude-haiku-5-5`.
+2. `s ≥ 0.6C` and no progress: switch the edit/repair loop to `claude-haiku-5-5`. Progress means the count of failing target tests is lower than at the previous check, or a first patch has applied cleanly.
 3. `s ≥ 0.85C`: narrow — stop exploring, allow one minimal-patch attempt, cap remaining turns.
-4. `s ≥ C`: abort with a stated reason; revenue 0, cost bounded at the cap.
+4. `s ≥ C`: abort with a stated reason; revenue 0. Spend is bounded at the cap plus at most one in-flight model call (the governor checks before each call using a worst-case estimate for the next one).
 
 Rung thresholds are config values so they can be tuned on calibration tasks only.
 
@@ -66,25 +66,25 @@ Rung thresholds are config values so they can be tuned on calibration tasks only
   - **Submission needs** an accessible checkpoint link in the form `https://entire.io/gh/OWNER/REPO/commit/FULL_COMMIT_SHA` plus the checkpoint ID (from `entire checkpoint list`; location of the ID on the site is unverified). Checkpoints in public repositories are public, and the Sessions view shows requests and decisions.
   - **Privacy gate.** `push_sessions` is off until we have inspected a local checkpoint (`entire checkpoint explain HEAD`) for personal data and configured custom redactors where needed. Build sessions are started fresh inside this repo so earlier planning conversations are not captured.
   - **Hosted flow.** Sign in at entire.io with GitHub and authorize the Entire GitHub App; the guide says an org admin imports the repository. Whether a personal-account repo works is unverified; if an org is required we create one.
-  - **Optional, after M6.** Trails and entire-brain, aimed at Entire's separate "Best Use of Entire" prize (Checkpoints, Graph or Brain). Its stated window is Oct 10–11, so check the deadline before relying on it.
+  - **Optional, after M5.** Trails and entire-brain, aimed at Entire's separate "Best Use of Entire" prize (Checkpoints, Graph or Brain). Its stated window is Oct 10–11, so check the deadline before relying on it.
 - **cfo.ai.** Plan built from the measured ledger: cost per verified fix (p50/p90), solve rate, price, margin; scenarios for price tiers and volume; fixed costs and runway. Stored under `docs/business/`. Export format is unverified until we reach the product.
 
 ## 5. Evaluation design
 
-**Tasks.** About 16 closed issues from small, pure-Python, permissively licensed repos. A task qualifies if: the fix commit touches ≤ 3 files; it adds or changes a test that fails before and passes after; the suite runs in under 60 s with no network; dependencies install with `uv`; the issue text is self-contained.
+**Tasks.** 16 closed issues from small, pure-Python, permissively licensed repos, split into **4 calibration** and **12 evaluation** tasks. A task qualifies if: the fix commit touches ≤ 3 files; it adds or changes a test that fails before and passes after; the suite runs in under 60 s with no network; dependencies install with `uv`; the issue text is self-contained. If budget forces a smaller set, shrink the evaluation tasks, never the structure below.
 
-**Arms** (same tasks, same agent core):
-- **A** naive: whole-file context, flat price, no governor. The agent only runs the target tests as feedback.
-- **B** A + entire-graph scoped context + the baseline-aware verifier exposed to the agent as in-loop feedback, flat price. Run on a subset if budget requires; its job is to isolate the token and cost effect of graph context.
-- **C** B + quote + governor.
+**Arms** (same agent core):
+- **A** naive: whole-file context, flat price, no governor. The agent only runs the target tests as feedback. Run on all 16 tasks (calibration runs set the flat price; evaluation runs are the "before").
+- **B** A + entire-graph scoped context + the baseline-aware verifier exposed to the agent as in-loop feedback, flat price. Run on **all 16** tasks: its rows are the ledger the quoter learns from, and it isolates the token and cost effect of graph context.
+- **C** B + quote + governor. Run on the 12 evaluation tasks, plus a few calibration-task runs for tuning rung thresholds.
 
-Revenue for every arm is decided by the same baseline-aware verifier, so the arms are scored identically.
+Revenue for every arm is decided by the same baseline-aware verifier, so the arms are scored identically. Run order is forced by the dependencies: A, then B, then C.
 
-**Leakage control.** The quoter for task *t* is fit on the ledger *excluding t* (leave-one-out). Rung thresholds are tuned on a separate calibration subset, not the evaluation tasks.
+**Leakage control.** The quoter for task *t* is fit on arm-B rows *excluding t* (leave-one-out). Rung thresholds are tuned on calibration tasks only.
 
-**Reported metrics.** Solve rate, % jobs profitable, gross margin, wasted spend on failed runs, quote coverage and median quote error, mean tokens per solved task.
+**Reported metrics.** Solve rate, % jobs profitable, gross margin, wasted spend on failed runs, mean tokens per solved task, and quote accuracy. **Quote coverage** is measured against arm B's unconstrained actual costs: the share of tasks whose B cost falls inside the leave-one-out band, plus median quote error. It is deliberately independent of the governor, which caps arm C's spend by design.
 
-**Dev loop.** Three tasks for iteration; the full set only for evidence runs. The bench runner has a global spend guard (`MARGIN_BENCH_BUDGET_USD`) that aborts the batch, and it uses the same spend meter as the governor.
+**Dev loop.** Three of the calibration tasks for iteration; the full set only for evidence runs. The bench runner has a global spend guard (`MARGIN_BENCH_BUDGET_USD`) that aborts the batch, and it uses the same spend meter as the governor.
 
 ## 6. Risks
 
@@ -92,11 +92,18 @@ Revenue for every arm is decided by the same baseline-aware verifier, so the arm
 |---|---|
 | Quotes are inaccurate (pre-run token use is highly variable) | Quote is a band plus a hard cap; coverage is reported including misses; the governor bounds the downside. |
 | Benchmark spend | Small dev set, global spend guard, Haiku fallback, calibration reused. |
-| Sandbox flakiness | Task vetting rules; hard timeouts; per-repo cached venv. |
+| Sandbox flakiness | Task vetting rules; hard timeouts; per-repo cached venv; baseline run twice with flaky ids excluded. |
+| Agent-run code and local secrets | No free shell; file tools confined to the worktree; scrubbed subprocess environments; repos pinned to a commit. |
 | Checkpoint transcripts leak personal data | `push_sessions` off; review before any publication. |
 | cfo.ai export unknown | Capture the plan as screenshots and notes in `docs/business/` regardless of export support. |
 | Scope | Cut order if behind: receipt HTML → markdown only; resume → documented only; narrow rung. Never cut quote, cap, downgrade, verifier, or the benchmark. |
 
 ## 7. Milestones (order, not dates)
 
-M0 foundation (repo, Entire, neatlogs hello-trace, `neatlogs doctor`) → M1 walking skeleton (agent fixes one task, traced) → M2 verifier with baseline → M3 bench harness and arm A runs (the "before" traces) → M4 ledger, quoter, governor (arm C) → M5 fault injection and resume → M6 entire-graph context (arm B) → M7 cfo.ai plan from real numbers → M8 evidence page, demo video, submission.
+M0 foundation (project scaffold, neatlogs hello-trace, `neatlogs doctor`) → M1 walking skeleton (agent fixes one task, traced) → M2 verifier with baseline → M3 task set, bench harness and arm A runs (the "before" traces) → M4 entire-graph context and arm B runs (the ledger) → M5 quoter, governor and arm C runs → M6 fault injection and resume → M7 cfo.ai plan from real numbers → M8 evidence page, demo video, submission.
+
+Optional Entire work (Trails, entire-brain) starts only after M5 works.
+
+## 8. Prerequisites (provided by the builder)
+
+`ANTHROPIC_API_KEY`; the neatlogs **project** API key as `NEATLOGS_API_KEY`; an entire.io sign-in with the Entire GitHub App authorised; a cfo.ai account created through cfo.ai/neathacks with the subscription cancelled immediately; a decision on the benchmark spend ceiling (`MARGIN_BENCH_BUDGET_USD`).
