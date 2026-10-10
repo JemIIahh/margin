@@ -50,3 +50,44 @@ def test_record_failure_opens_a_span_that_sees_the_error_and_does_not_leak_it(mo
     telemetry.record_failure("failed:model_call", "overloaded")  # must not raise
     assert ("error", "failed:model_call", "TOOL", "overloaded") in seen
     assert ("attr", "margin.detail", "overloaded") in seen
+
+
+from fakes import install_fake_neatlogs as _fake_neatlogs
+
+
+def test_a_span_an_exception_passes_through_is_marked_failed_and_the_exception_still_propagates(monkeypatch):
+    """neatlogs.trace is a bare try/finally (verified in the installed SDK and against the live service: the span
+    ended SUCCESS), so the shim must mark failures itself or no recovery would ever look like a failure."""
+    import pytest
+
+    spans = _fake_neatlogs(monkeypatch)
+    with pytest.raises(RuntimeError, match="boom"), telemetry.trace("injected-failure", kind="TOOL"):
+        raise RuntimeError("boom")
+    span = spans[0]
+    assert span.status is not None and span.status.status_code.name == "ERROR"
+    assert [str(e) for e in span.exceptions] == ["boom"]
+    assert span.attrs["error"] is True and "boom" in span.attrs["error.message"]
+
+
+def test_a_span_that_completes_normally_is_not_marked_failed(monkeypatch):
+    spans = _fake_neatlogs(monkeypatch)
+    with telemetry.trace("ok", kind="TOOL"):
+        pass
+    assert spans[0].status is None and "error" not in spans[0].attrs
+
+
+def test_marking_a_failure_never_breaks_the_run_if_the_span_cannot_take_it(monkeypatch):
+    import contextlib
+    import sys
+    import types
+
+    import pytest
+
+    @contextlib.contextmanager
+    def bare_trace(name, kind=None):
+        yield types.SimpleNamespace(set_attribute=lambda k, v: (_ for _ in ()).throw(RuntimeError("span closed")))
+
+    monkeypatch.setitem(sys.modules, "neatlogs", types.SimpleNamespace(trace=bare_trace))
+    monkeypatch.setattr(telemetry, "_enabled", True)
+    with pytest.raises(ValueError, match="the real error"), telemetry.trace("x", kind="TOOL"):  # caller sees ITS error
+        raise ValueError("the real error")

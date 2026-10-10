@@ -68,6 +68,19 @@ def span(kind: str, name: str | None = None, **kwargs: Any) -> Callable:
     return decorate
 
 
+def _mark_failed(span: Any, exc: BaseException) -> None:
+    """Record the exception and set an error status. Telemetry must never replace the caller's own error."""
+    message = f"{type(exc).__name__}: {exc}"
+    with contextlib.suppress(Exception):
+        from opentelemetry.trace import Status, StatusCode
+
+        span.record_exception(exc)
+        span.set_status(Status(StatusCode.ERROR, message))
+    with contextlib.suppress(Exception):  # a span that cannot take a status still gets the plain attributes
+        span.set_attribute("error", True)
+        span.set_attribute("error.message", message)
+
+
 @contextlib.contextmanager
 def trace(name: str, kind: str, **attrs: Any) -> Iterator[Any]:
     if not _enabled:
@@ -78,7 +91,11 @@ def trace(name: str, kind: str, **attrs: Any) -> Iterator[Any]:
     with neatlogs.trace(name, kind=kind) as sp:
         for key, value in attrs.items():
             sp.set_attribute(key, coerce(value))
-        yield sp
+        try:
+            yield sp
+        except Exception as exc:
+            _mark_failed(sp, exc)  # neatlogs.trace is a bare try/finally: without this the span ends as a success
+            raise
 
 
 def record_failure(name: str, detail: str, kind: str = "TOOL") -> None:

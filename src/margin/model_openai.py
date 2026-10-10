@@ -173,7 +173,12 @@ def from_openai_response(data: dict, *, proxy_cost: float | None = None) -> Simp
 
 
 class OpenAICompatModel:
-    """Same `.create(**params)` surface as AnthropicModel, over an OpenAI-compatible endpoint."""
+    """Same `.create(**params)` surface as AnthropicModel, over an OpenAI-compatible endpoint.
+
+    The call goes through the SDK's normal parsed `create`, not `with_raw_response`: neatlogs' openai instrumentation
+    reads `.usage` from what `create` returns, and a raw response has none (every LLM span showed 0 tokens). The
+    proxy's per-call cost lives in a response header, which a response hook on the HTTP client captures instead.
+    """
 
     def __init__(self, client: Any, *, max_output: dict[str, int] | None = None,
                  cost_header: str = "x-litellm-response-cost"):
@@ -181,15 +186,25 @@ class OpenAICompatModel:
         self.max_output = max_output
         self.cost_header = cost_header
         self.proxy_cost_usd = 0.0  # what the proxy says this client spent: a check on our own metering
+        self._last_cost: float | None = None
+        http = client._client  # the underlying HTTP client
+        http.event_hooks = {**http.event_hooks, "response": [*http.event_hooks.get("response", []), self._capture_cost]}
+
+    def _capture_cost(self, response: Any) -> None:
+        value = response.headers.get(self.cost_header)
+        try:
+            self._last_cost = float(value) if value not in (None, "") else None
+        except ValueError:
+            self._last_cost = None
 
     def create(self, **params: Any) -> Any:
         body = to_openai_request(params, max_output=self.max_output)
-        raw = self._client.chat.completions.with_raw_response.create(**body)
-        cost = raw.headers.get(self.cost_header)
-        proxy_cost = float(cost) if cost not in (None, "") else None
+        self._last_cost = None
+        completion = self._client.chat.completions.create(**body)
+        proxy_cost = self._last_cost
         if proxy_cost is not None:
             self.proxy_cost_usd += proxy_cost
-        return from_openai_response(raw.http_response.json(), proxy_cost=proxy_cost)
+        return from_openai_response(completion.model_dump(), proxy_cost=proxy_cost)
 
 
 def make_litellm_client() -> OpenAICompatModel:

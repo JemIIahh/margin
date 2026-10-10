@@ -1,6 +1,7 @@
 """The agent loop: one model call per turn, tools run locally, spend governed before each call."""
 from __future__ import annotations
 
+import contextlib
 import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -13,7 +14,7 @@ from margin.governor import Rung
 from margin.model import build_request, is_transient
 from margin.pricing import PriceTable, SpendMeter, Usage
 from margin.state import RunState
-from margin.telemetry import record_failure, trace
+from margin.telemetry import coerce, record_failure, trace
 
 
 @dataclass
@@ -54,6 +55,17 @@ def call_with_retry(client: Any, params: dict, *, state: RunState, faults: Any, 
             with trace("retry", kind="GUARDRAIL", **{"margin.attempt": attempt + 1, "margin.delay_s": delay}):
                 pass
             sleep(delay)
+
+
+def _label_turn(span: Any, usage: Usage, cost: float, spend: float) -> None:
+    """Put the turn's tokens and metered cost on its trace span. Telemetry must never fail the run."""
+    with contextlib.suppress(Exception):
+        for key, value in {
+            "margin.input_tokens": usage.input_tokens, "margin.output_tokens": usage.output_tokens,
+            "margin.cache_read_tokens": usage.cache_read_tokens, "margin.cache_write_tokens": usage.cache_write_tokens,
+            "margin.cost_usd": cost, "margin.spend_usd": spend,
+        }.items():
+            span.set_attribute(key, coerce(value))
 
 
 def _append_notice(messages: list, text: str) -> None:
@@ -142,16 +154,19 @@ def run_agent(
             max_tokens=settings.max_tokens,
         )
         try:
-            with trace(f"turn-{turn}", kind="AGENT", **{"margin.turn": turn, "margin.model": model}):
+            with trace(f"turn-{turn}", kind="AGENT", **{"margin.turn": turn, "margin.model": model}) as turn_span:
                 response = call_with_retry(client, params, state=state, faults=faults, sleep=sleep)
+                usage = Usage.from_api(response.usage)
+                cost = meter.record(model, usage)
+                state.log(
+                    "model_usage", model=model, usage=usage.to_dict(), cost=round(cost, 6), stop=response.stop_reason
+                )
+                _label_turn(turn_span, usage, cost, meter.total_usd)
         except Exception as exc:  # noqa: BLE001 - a failed call ends the run, it must not crash the batch
             message = f"{type(exc).__name__}: {exc}"
             state.log("error", error=message)
             return result("error", message)
 
-        usage = Usage.from_api(response.usage)
-        cost = meter.record(model, usage)
-        state.log("model_usage", model=model, usage=usage.to_dict(), cost=round(cost, 6), stop=response.stop_reason)
         last_prompt_tokens = max(1, usage.prompt_tokens)
         messages.append({"role": "assistant", "content": [b.to_dict() for b in response.content]})
         turn += 1

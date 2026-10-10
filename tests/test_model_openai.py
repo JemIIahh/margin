@@ -303,3 +303,43 @@ def test_telemetry_instruments_the_sdk_in_use(monkeypatch):
     monkeypatch.setenv("MARGIN_PROVIDER", "litellm")
     telemetry.init_telemetry("margin", [])
     assert seen == [["anthropic"], ["openai"]]
+
+
+def test_create_returns_a_parsed_completion_so_neatlogs_can_read_token_usage(monkeypatch):
+    """neatlogs' openai instrumentation wraps Completions.create and reads `.usage` on what it returns. A raw
+    response (with_raw_response) has no `.usage`, which left every LLM span with 0 tokens in the live dashboard."""
+    openai_completions = pytest.importorskip("openai.resources.chat.completions")
+    httpx2 = pytest.importorskip("httpx2")
+    seen = []
+    original = openai_completions.Completions.create
+
+    def spy(self, *args, **kwargs):
+        result = original(self, *args, **kwargs)
+        seen.append(getattr(getattr(result, "usage", None), "prompt_tokens", None))
+        return result
+
+    monkeypatch.setattr(openai_completions.Completions, "create", spy)   # before the client is built, as instrumentation does
+
+    def handler(request):
+        data = reply("ok", usage={"prompt_tokens": 100, "completion_tokens": 10})
+        return httpx2.Response(200, json=data, headers={"x-litellm-response-cost": "0.0007"})
+
+    client = make_client(handler)
+    out = client.create(**params())
+    assert seen == [100]                                   # the instrumented call returned something with usage
+    assert out.proxy_cost_usd == pytest.approx(0.0007)     # and the proxy's own cost is still captured, via a hook
+
+
+def test_a_reply_without_a_cost_header_has_no_proxy_cost_and_does_not_reuse_the_last_one():
+    httpx2 = pytest.importorskip("httpx2")
+    calls = []
+
+    def handler(request):
+        calls.append(1)
+        headers = {"x-litellm-response-cost": "0.5"} if len(calls) == 1 else {}
+        return httpx2.Response(200, json=reply("ok", usage={"prompt_tokens": 1, "completion_tokens": 1}), headers=headers)
+
+    client = make_client(handler)
+    assert client.create(**params()).proxy_cost_usd == pytest.approx(0.5)
+    assert client.create(**params()).proxy_cost_usd is None
+    assert client.proxy_cost_usd == pytest.approx(0.5)

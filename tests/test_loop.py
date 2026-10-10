@@ -201,3 +201,18 @@ def test_the_checkpoint_records_the_governors_progress_counter(tmp_path):
     replies = [reply([tool_use("t1", "read_file", {"path": "a"})], stop="tool_use"), reply([text("done")])]
     _, _, _, state, _ = go(tmp_path, replies, governor=Governor(cap_usd=100.0))
     assert isinstance(state.load_checkpoint()["extra"]["governor_seen"], int)
+
+
+def test_each_agent_turn_span_carries_the_tokens_and_metered_cost_of_that_turn(tmp_path, monkeypatch):
+    from fakes import install_fake_neatlogs
+
+    spans = install_fake_neatlogs(monkeypatch)
+    replies = [reply([tool_use("t1", "read_file", {"path": "a"})], stop="tool_use", input_tokens=1000, output_tokens=200),
+               reply([text("done")], input_tokens=1500, output_tokens=50)]
+    _, _, meter, _, _ = go(tmp_path, replies)
+    turns = [s for s in spans if s.name.startswith("turn-")]
+    assert [s.name for s in turns] == ["turn-0", "turn-1"]
+    first, second = turns[0].attrs, turns[1].attrs
+    assert (first["margin.input_tokens"], first["margin.output_tokens"]) == (1000, 200)
+    assert first["margin.cost_usd"] != "0.000000" and float(second["margin.spend_usd"]) == pytest.approx(meter.total_usd, abs=1e-6)
+    assert float(first["margin.spend_usd"]) < float(second["margin.spend_usd"])

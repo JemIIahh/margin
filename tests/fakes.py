@@ -68,3 +68,29 @@ class FakeGraph:
 
     def impact(self, symbol):
         return f"GRAPH-IMPACT:{symbol}"
+
+
+def install_fake_neatlogs(monkeypatch):
+    """A fake neatlogs whose spans record what the code does to them (like the real one, trace() never marks errors)."""
+    import contextlib
+    import sys
+    import types
+
+    from margin import telemetry
+
+    spans = []
+
+    @contextlib.contextmanager
+    def fake_trace(name, kind=None):
+        span = types.SimpleNamespace(
+            name=name, kind=kind, attrs={}, status=None, exceptions=[],
+            set_attribute=lambda k, v: span.attrs.__setitem__(k, v),
+            set_status=lambda s: setattr(span, "status", s),
+            record_exception=lambda e: span.exceptions.append(e),
+        )
+        spans.append(span)
+        yield span
+
+    monkeypatch.setitem(sys.modules, "neatlogs", types.SimpleNamespace(trace=fake_trace))
+    monkeypatch.setattr(telemetry, "_enabled", True)
+    return spans
