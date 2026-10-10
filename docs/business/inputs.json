@@ -1,0 +1,32 @@
+{
+  "A": {
+    "runs": 12,
+    "solve_rate": 0.6666666666666666,
+    "cost_per_job_p50": 0.14551575500000002,
+    "cost_per_job_p90": 0.24400618000000004,
+    "cost_per_verified_fix": 0.26068200125,
+    "avg_price": 0.300613,
+    "revenue_per_job": 0.20040866666666668,
+    "gross_margin": 0.1328319092986664
+  },
+  "B": {
+    "runs": 12,
+    "solve_rate": 0.9166666666666666,
+    "cost_per_job_p50": 0.07627421999999999,
+    "cost_per_job_p90": 0.172396345,
+    "cost_per_verified_fix": 0.10934385999999999,
+    "avg_price": 0.300613,
+    "revenue_per_job": 0.2755619166666667,
+    "gross_margin": 0.636263701170608
+  },
+  "C": {
+    "runs": 12,
+    "solve_rate": 0.75,
+    "cost_per_job_p50": 0.09210206500000001,
+    "cost_per_job_p90": 0.14171124000000002,
+    "cost_per_verified_fix": 0.12914501416666668,
+    "avg_price": 0.34286890636570794,
+    "revenue_per_job": 0.26076570669260146,
+    "gross_margin": 0.6285602050457499
+  }
+}
