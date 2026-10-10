@@ -9,7 +9,7 @@ run `make verify` to regenerate `docs/results.md` from it and fail if it differs
 
 ## The agent improved
 - Before and after, 12 evaluation tasks: [`docs/results.md`](docs/results.md).
-- Same task, `marshmallow-2900`: arm A (naive, flat price) run `marshmallow-2900-A-20261010-145224-b903` ended not verified at $0.23; arm C (quote, cap, graph context) run `marshmallow-2900-C-20261010-183320-b1c6` verified at $0.14. Traces: {{TRACE_URL_A}} versus {{TRACE_URL_C}}.
+- Same task, `marshmallow-2900`: arm A (naive, flat price) run `marshmallow-2900-A-20261010-145224-b903` ended not verified at $0.23; arm C (quote, cap, graph context) run `marshmallow-2900-C-20261010-183320-b1c6` verified at $0.14. Screenshots of the two traces in neatlogs: [arm A](docs/evidence/trace-arm-a.jpg) and [arm C](docs/evidence/trace-arm-c.jpg). The first model call carries 33,582 tokens in arm A (whole files as context) and 2,916 in arm C (graph context).
 - What changed between them: graph context for the agent, then the quote and the governor, built in the session the checkpoint below records (its Sessions and Changes views); the measured effect and where it did not help are in [`docs/notes/arm-c-evaluation.md`](docs/notes/arm-c-evaluation.md).
 - How the 12 evaluation tasks (and 4 calibration tasks) were chosen, and which candidates were rejected and why: [`docs/notes/task-curation.md`](docs/notes/task-curation.md).
 
