@@ -131,6 +131,47 @@ def cmd_resume(args: argparse.Namespace) -> int:
         shutdown_telemetry()
 
 
+def cmd_report(args: argparse.Namespace) -> int:
+    import json
+
+    from margin.bench.report import render_receipts_page, render_results
+    from margin.ledger import Ledger
+
+    settings = Settings.from_env()
+    ledger = Ledger(Path(args.ledger) if args.ledger else settings.root / "docs" / "evidence" / "ledger.jsonl")
+    flat_path = Path(args.flat or settings.root / "bench" / "flat_price.json")
+    if not flat_path.exists():
+        print(f"{flat_path} is missing; run `uv run margin calibrate-flat` after the arm A calibration runs")
+        return 1
+    flat = json.loads(flat_path.read_text())
+    out = Path(args.out or settings.root / "docs" / "results.md")
+    text = render_results(ledger, flat)
+    if args.check:
+        if not out.exists() or out.read_text() != text:
+            print(f"{out} is stale; run `uv run margin report`")
+            return 1
+        print(f"{out} is up to date")
+        return 0
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(text)
+    print(f"wrote {out}")
+    html = Path(args.html) if args.html else settings.root / "docs" / "receipts.html"
+    html.write_text(render_receipts_page(list(ledger.latest("C").values())))
+    print(f"wrote {html}")
+    return 0
+
+
+def cmd_snapshot_ledger(args: argparse.Namespace) -> int:
+    import shutil
+
+    settings = Settings.from_env()
+    dest = settings.root / "docs" / "evidence" / "ledger.jsonl"
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(settings.ledger_path, dest)
+    print(f"copied {settings.ledger_path} -> {dest}")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="margin")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -167,6 +208,16 @@ def build_parser() -> argparse.ArgumentParser:
     resume.add_argument("--run-id", required=True)
     resume.add_argument("--tasks-file", default=None)
     resume.set_defaults(func=cmd_resume)
+    report = sub.add_parser("report", help="regenerate docs/results.md and the receipts page from the ledger")
+    report.add_argument("--ledger", default=None)
+    report.add_argument("--flat", default=None)
+    report.add_argument("--out", default=None)
+    report.add_argument("--html", default=None)
+    report.add_argument("--check", action="store_true", help="fail if the results file is out of date")
+    report.set_defaults(func=cmd_report)
+
+    snap = sub.add_parser("snapshot-ledger", help="copy runs/ledger.jsonl to docs/evidence/ledger.jsonl")
+    snap.set_defaults(func=cmd_snapshot_ledger)
     return parser
 
 
