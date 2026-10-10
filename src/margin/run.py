@@ -15,7 +15,7 @@ from margin.config import Settings
 from margin.context import GraphError, naive_context
 from margin.errors import SimulatedCrash
 from margin.governor import Governor, NullGovernor
-from margin.ledger import Ledger, RunRecord, render_receipt, settle
+from margin.ledger import Ledger, RunRecord, history_ledger, render_receipt, settle
 from margin.model import make_model_client
 from margin.pricing import PriceTable, SpendMeter
 from margin.sandbox import GitTampered
@@ -102,7 +102,7 @@ def execute_run(
                 quote = {k: saved[-1][k] for k in ("p50", "lo", "hi")}
                 price = saved[-1]["price"]
             else:
-                quoted = Quoter(training_rows(ledger, exclude=task.id), prior_cost=settings.default_cost_usd).quote(feats)
+                quoted = Quoter(training_rows(history_ledger(settings.root, settings.ledger_path), exclude=task.id), prior_cost=settings.default_cost_usd).quote(feats)
                 quote = {"p50": quoted.p50, "lo": quoted.lo, "hi": quoted.hi}
                 price = quoted.price(settings.target_markup)
                 state.log("quote", price=price, **quote)

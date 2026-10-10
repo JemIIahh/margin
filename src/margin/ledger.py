@@ -85,6 +85,24 @@ class Ledger:
         return out
 
 
+class CombinedLedger:
+    """Several ledgers read as one, later ones winning per task: the published evidence, then the runs made locally."""
+
+    def __init__(self, *ledgers: Ledger):
+        self.ledgers = ledgers
+
+    def latest(self, arm: str, version: str | None = None) -> dict[str, RunRecord]:
+        out: dict[str, RunRecord] = {}
+        for ledger in self.ledgers:
+            out.update(ledger.latest(arm, version))
+        return out
+
+
+def history_ledger(root: Path, local_path: Path) -> CombinedLedger:
+    """What quotes learn from: the evidence ledger committed in the repository plus this machine's own runs."""
+    return CombinedLedger(Ledger(Path(root) / "docs" / "evidence" / "ledger.jsonl"), Ledger(local_path))
+
+
 def render_receipt(r: RunRecord) -> str:
     if r.quote:
         quote = f"${r.quote['lo']:.4f} – ${r.quote['hi']:.4f} (p50 ${r.quote['p50']:.4f})"

@@ -113,3 +113,16 @@ def test_a_receipt_for_a_flat_priced_arm_says_the_price_is_set_at_report_time():
     assert "set at report time" in text and "Price: $0.0000" not in text and "Margin: $-" not in text
     quoted = render_receipt(rec(arm="C", solved=False, cost=0.2, price=0.5, quote={"p50": 0.2, "lo": 0.1, "hi": 0.3}))
     assert "Price: $0.5000" in quoted and "set at report time" not in quoted
+
+
+def test_a_combined_ledger_reads_the_published_evidence_and_the_local_runs_as_one(tmp_path):
+    from margin.ledger import CombinedLedger
+
+    evidence, local = Ledger(tmp_path / "evidence.jsonl"), Ledger(tmp_path / "local.jsonl")
+    evidence.append(rec(run_id="e1", task="t1", arm="B", cost=1.0, features={"issue_tokens": 1}))
+    evidence.append(rec(run_id="e2", task="t2", arm="B", cost=2.0, features={"issue_tokens": 2}))
+    local.append(rec(run_id="l1", task="t1", arm="B", cost=9.0, features={"issue_tokens": 9}))
+    combined = CombinedLedger(evidence, local)
+    latest = combined.latest("B")
+    assert set(latest) == {"t1", "t2"} and latest["t1"].run_id == "l1" and latest["t2"].run_id == "e2"
+    assert CombinedLedger(Ledger(tmp_path / "missing.jsonl"), local).latest("B").keys() == {"t1"}

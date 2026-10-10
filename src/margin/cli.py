@@ -101,7 +101,7 @@ def cmd_calibrate_flat(args: argparse.Namespace) -> int:
 def cmd_quote(args: argparse.Namespace) -> int:
     from margin.bench.tasks import prepare_run, remove_worktree
     from margin.context import GraphContext
-    from margin.ledger import Ledger
+    from margin.ledger import history_ledger
     from margin.quote import Quoter, extract_features, training_rows
 
     settings = Settings.from_env()
@@ -113,7 +113,7 @@ def cmd_quote(args: argparse.Namespace) -> int:
         )
     finally:  # a quote only needs the features; do not leave a checkout behind for every quote asked
         remove_worktree(prep.bare, prep.sandbox.root)
-    rows = training_rows(Ledger(settings.ledger_path), exclude=task.id)
+    rows = training_rows(history_ledger(settings.root, settings.ledger_path), exclude=task.id)
     quote = Quoter(rows, prior_cost=settings.default_cost_usd).quote(features)
     print(
         f"{task.id}: cost band ${quote.lo:.4f} - ${quote.hi:.4f} (p50 ${quote.p50:.4f}) "
