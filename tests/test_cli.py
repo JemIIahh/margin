@@ -95,3 +95,22 @@ def test_quote_on_a_fresh_clone_learns_from_the_published_evidence_ledger(tmp_pa
     monkeypatch.setattr("margin.quote.extract_features", lambda *a, **k: Features(103, 3, 1000, 2.0))
     assert main(["quote", "--task", "t1", "--tasks-file", str(tasks_file)]) == 0
     assert "from 6 past runs" in capsys.readouterr().out
+
+
+def test_tasks_validate_limits_can_be_raised_for_larger_tasks(monkeypatch, capsys):
+    """The benchmark's curation limits (3 source files, 60 s) are defaults, not rules: harder tasks raise them."""
+    from margin.bench import tasks as tasks_mod
+    from margin.cli import main
+
+    seen = {}
+
+    def fake_validate(task, settings, **kwargs):
+        seen.update(kwargs)
+        return {"ok": True, "problems": [], "baseline_seconds": 1.0}
+
+    monkeypatch.setattr(tasks_mod, "validate_task", fake_validate)
+    assert main(["tasks", "validate", "--ids", "cachetools-423", "--max-source-files", "8", "--max-seconds", "120"]) == 0
+    assert seen == {"max_source_files": 8, "max_seconds": 120.0}
+    seen.clear()
+    assert main(["tasks", "validate", "--ids", "cachetools-423"]) == 0
+    assert seen == {"max_source_files": 3, "max_seconds": 60.0}

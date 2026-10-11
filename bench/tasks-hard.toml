@@ -1,0 +1,44 @@
+# Held-out hard tasks, run after the benchmark was frozen: multi-file fixes of 50 to 330 changed source lines, in repositories
+# the task search never used. Not part of any reported table; see docs/notes/stress-test.md.
+
+[[task]]
+id = "click-2952"
+split = "live"
+repo = "https://github.com/pallets/click"
+base_commit = "5c1239b0116b66492cdd0848144ab3c78a04495a"
+fix_commit = "9caedb9206103dfb5465e1916bc2f13b9c10c0e4"
+issue_url = "https://github.com/pallets/click/issues/2952"
+issue_file = "bench/issues/click-2952.md"
+target_tests = ["tests/test_options.py::test_boolean_envvar_bad_values[SHOUT-00]", "tests/test_options.py::test_boolean_envvar_bad_values[SHOUT-01]", "tests/test_options.py::test_boolean_envvar_bad_values[SHOUT-10]", "tests/test_options.py::test_boolean_envvar_bad_values[SHOUT-11]", "tests/test_options.py::test_boolean_envvar_bad_values[SHOUT-None]", "tests/test_options.py::test_boolean_envvar_bad_values[SHOUT-randomstring]", "tests/test_options.py::test_boolean_envvar_bad_values[SHOUT-tr ue]", "tests/test_options.py::test_boolean_envvar_normalization[SHOUT-       -False]", "tests/test_options.py::test_boolean_envvar_normalization[SHOUT- -False]", "tests/test_options.py::test_boolean_envvar_normalization[SHOUT- false -False]", "tests/test_options.py::test_boolean_envvar_normalization[SHOUT- false-False]", "tests/test_options.py::test_boolean_envvar_normalization[SHOUT-0-False]", "tests/test_options.py::test_boolean_envvar_normalization[SHOUT-FALSE-False]", "tests/test_options.py::test_boolean_envvar_normalization[SHOUT-FaLsE-False]", "tests/test_options.py::test_boolean_envvar_normalization[SHOUT-False-False]", "tests/test_options.py::test_boolean_envvar_normalization[SHOUT-f-False]", "tests/test_options.py::test_boolean_envvar_normalization[SHOUT-falsE-False]", "tests/test_options.py::test_boolean_envvar_normalization[SHOUT-false -False]", "tests/test_options.py::test_boolean_envvar_normalization[SHOUT-false-False]", "tests/test_options.py::test_boolean_envvar_normalization[SHOUT-n-False]", "tests/test_options.py::test_boolean_envvar_normalization[SHOUT-no-False]", "tests/test_options.py::test_boolean_envvar_normalization[SHOUT-off-False]", "tests/test_options.py::test_envvar_flag_value[ bar -BAR-False]", "tests/test_options.py::test_envvar_flag_value[ bar -bar-False]", "tests/test_options.py::test_envvar_flag_value[BAR-bar-False]", "tests/test_options.py::test_envvar_flag_value[bar- bar -False]", "tests/test_options.py::test_envvar_flag_value[bar--False]", "tests/test_options.py::test_envvar_flag_value[bar-0-False]", "tests/test_options.py::test_envvar_flag_value[bar-BAR-False]", "tests/test_options.py::test_envvar_flag_value[bar-False-False]", "tests/test_options.py::test_envvar_flag_value[bar-bar random-False]", "tests/test_options.py::test_envvar_flag_value[bar-f-False]", "tests/test_options.py::test_envvar_flag_value[bar-random bar-False]", "tests/test_options.py::test_envvar_flag_value[bar-random-False]", "tests/test_options.py::test_flag_value_and_default[opt_params10-False-False]", "tests/test_options.py::test_flag_value_and_default[opt_params13-True-True]", "tests/test_options.py::test_flag_value_and_default[opt_params16-False-False]", "tests/test_options.py::test_flag_value_and_default[opt_params18-False-True]", "tests/test_options.py::test_flag_value_and_default[opt_params19-True-True]", "tests/test_options.py::test_flag_value_and_default[opt_params20-False-False]", "tests/test_options.py::test_flag_value_and_default[opt_params22-False-foo]", "tests/test_options.py::test_flag_value_and_default[opt_params23-True-foo]", "tests/test_options.py::test_flag_value_and_default[opt_params24-False-False]", "tests/test_options.py::test_flag_value_and_default[opt_params38-False-False]", "tests/test_options.py::test_flag_value_and_default[opt_params4-False-False]", "tests/test_options.py::test_flag_value_and_default[opt_params40-False-False]", "tests/test_options.py::test_flag_value_and_default[opt_params42-False-False]", "tests/test_options.py::test_flag_value_and_default[opt_params44-False-False]", "tests/test_options.py::test_flag_value_and_default[opt_params50-False-False]", "tests/test_options.py::test_flag_value_and_default[opt_params51-False-False]", "tests/test_options.py::test_flag_value_and_default[opt_params53-False-True]", "tests/test_options.py::test_flag_value_and_default[opt_params54-False-False]", "tests/test_options.py::test_flag_value_and_default[opt_params55-False-False]", "tests/test_options.py::test_flag_value_and_default[opt_params56-False-foo]", "tests/test_options.py::test_flag_value_and_default[opt_params57-False-foo]", "tests/test_options.py::test_flag_value_and_default[opt_params58-False-foo]", "tests/test_options.py::test_flag_value_and_default[opt_params59-False-foo]", "tests/test_options.py::test_flag_value_and_default[opt_params60-False-False]", "tests/test_options.py::test_flag_value_and_default[opt_params61-False-False]", "tests/test_options.py::test_flag_value_and_default[opt_params7-True-True]", "tests/test_options.py::test_flag_value_and_default[opt_params75-True-foo]", "tests/test_options.py::test_invalid_flag_definition[opts0]", "tests/test_options.py::test_invalid_flag_definition[opts2]"]
+test_files = ["tests/test_arguments.py", "tests/test_basic.py", "tests/test_imports.py", "tests/test_options.py"]
+test_args = ["tests"]
+deps = ["pytest"]
+pythonpath = ["src"]
+
+[[task]]
+id = "black-1245"
+split = "live"
+repo = "https://github.com/psf/black"
+base_commit = "f7354342e4616eaff98e51eb00773f2825df5224"
+fix_commit = "b895a73fd4997657a80f2f3f2785c5d496739f6e"
+issue_url = "https://github.com/psf/black/issues/1245"
+issue_file = "bench/issues/black-1245.md"
+target_tests = ["tests/test_format.py::test_simple_format[fmtonoff]", "tests/test_format.py::test_simple_format[fmtskip7]"]
+test_files = ["tests/data/cases/fmtonoff.py", "tests/data/cases/fmtskip7.py"]
+test_args = ["tests"]
+deps = ["pytest", "black[d,jupyter]"]
+pythonpath = ["src"]
+
+[[task]]
+id = "black-4349"
+split = "live"
+repo = "https://github.com/psf/black"
+base_commit = "6cf262f7174e4b7c52768aeffcf77fc5dd90b293"
+fix_commit = "00cd1e4a6b306679dca12730873fa49fb9c06343"
+issue_url = "https://github.com/psf/black/issues/4349"
+issue_file = "bench/issues/black-4349.md"
+target_tests = ["tests/test_format.py::test_simple_format[preview_prefer_rhs_split_indexed_assignment]"]
+test_files = ["tests/data/cases/prefer_rhs_split.py", "tests/data/cases/prefer_rhs_split_reformatted.py", "tests/data/cases/preview_prefer_rhs_split_indexed_assignment.py"]
+test_args = ["tests"]
+deps = ["pytest", "black[d,jupyter]"]
+pythonpath = ["src"]

@@ -24,6 +24,8 @@ run `make verify` to regenerate `docs/results.md` from it and fail if it differs
 
 - A live test on an issue outside the benchmark: Python-Markdown #1647, in a repository the task search never mined, fixed upstream eight days before the run. Arm E quoted $0.022 to $0.112 (price $0.168), was coached once at turn 8, and verified a one-line fix for $0.069 (margin $0.099). A review after the run found what the tests did not: the worker's regex slows exponentially on long unclosed tags, though the coach's suggestion did not; and the run's environment could not load 364 extension tests, which a re-check then passed ([`docs/notes/live-test.md`](docs/notes/live-test.md)).
 
+- A stress test on three harder tasks (fixes of 50 to 330 source lines in repositories the search never used): none was fixed. All three stopped on the cap or the turn limit before the agent made an edit, with nothing billed and $0.36 spent in all; the quoter, trained on repositories up to 7,300 lines, quoted the 103,000-line one like a one-line fix ([`docs/notes/stress-test.md`](docs/notes/stress-test.md)).
+
 - How other agents are priced, and what Margin combines that we did not find elsewhere: [`docs/notes/landscape.md`](docs/notes/landscape.md) (public pricing pages checked 2026-10-11, with the unverified items marked).
 
 ## You used neatlogs

@@ -123,7 +123,7 @@ def cmd_tasks_validate(args: argparse.Namespace) -> int:
     chosen = [find_task(tasks, i) for i in args.ids] if args.ids else tasks
     failures = 0
     for task in chosen:
-        result = validate_task(task, settings)
+        result = validate_task(task, settings, max_source_files=args.max_source_files, max_seconds=args.max_seconds)
         status = "ok  " if result["ok"] else "FAIL"
         print(f"{status} {task.id} ({result['baseline_seconds']}s) {'; '.join(result['problems'])}")
         failures += 0 if result["ok"] else 1
@@ -481,6 +481,8 @@ def build_parser() -> argparse.ArgumentParser:
     validate = tasks_sub.add_parser("validate", help="check tasks are usable")
     validate.add_argument("--ids", nargs="*", default=None)
     validate.add_argument("--tasks-file", default=None)
+    validate.add_argument("--max-source-files", type=int, default=3, help="curation limit on files the fix touches (default 3)")
+    validate.add_argument("--max-seconds", type=float, default=60.0, help="curation limit on the baseline suite run (default 60)")
     validate.set_defaults(func=cmd_tasks_validate)
     bench = sub.add_parser("bench", help="run one arm over many tasks")
     bench.add_argument("--arm", required=True, choices=["A", "B", "C", "D", "E"])

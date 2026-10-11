@@ -124,7 +124,7 @@ Checked on a fresh clone with no `.env`:
 ```bash
 git clone https://github.com/JemIIahh/margin.git && cd margin
 uv sync
-make verify                                 # 467 tests, offline; regenerates docs/results.md from the stored ledger and checks it
+make verify                                 # 468 tests, offline; regenerates docs/results.md from the stored ledger and checks it
 uv run margin quote --task tabulate-241     # free, no model call: the price band, learned from the published ledger
 open docs/receipts.html                     # one card per recorded run, verified and not verified
 open docs/console.html                      # the recorded runs as a film, a proof page and a what-if
@@ -194,5 +194,6 @@ a row to `runs/ledger.jsonl`.
 - [`EVIDENCE.md`](EVIDENCE.md): every claim, linked to something you can open
 - [`docs/notes/audit-2026-10-11.md`](docs/notes/audit-2026-10-11.md): the audit of 56 recorded runs that led to arms D and E
 - [`docs/notes/live-test.md`](docs/notes/live-test.md): one live run on a bug outside the benchmark, and what its tests did not catch
+- [`docs/notes/stress-test.md`](docs/notes/stress-test.md): three harder tasks, none fixed, and why (the cap and the quote)
 - [`hackathon.md`](hackathon.md): the build log
 - [`docs/superpowers/specs/2026-10-10-margin-design.md`](docs/superpowers/specs/2026-10-10-margin-design.md): the design
