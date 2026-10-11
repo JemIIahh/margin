@@ -57,6 +57,12 @@ Solo. Registered team name: Sofer.
 - Generated the results page, the receipts page (checked at 390px) and the business-plan inputs from the stored ledger. Spend so far: $7.32 of the event's $20 allowance.
 - Entire Brain: seven durable facts written by hand with explicit categories (`entire brain remember --agent none --path ...`), so nothing was extracted from sessions and no model was called; they sit outside the repository, and `entire brain facts status` reports `authored=7 distilled=0`. Automatic extraction was left off because it would send session text, which holds the home path and old emails, to a model provider.
 
+### 2026-10-11 (audit and arm D)
+
+- Audited the 56 recorded runs ([`docs/notes/audit-2026-10-11.md`](docs/notes/audit-2026-10-11.md)): verified runs on arms B and C spent 18% of their cost after the fix had already verified; arm C's downgrade swapped in a weaker model and wiped the conversation, and three of its four failures followed one; 10 of 12 failures ran out of turns; the agent tried 11 times to write a debugging script it could not run.
+- Built arm D test-first against those findings: a coach model (`claude-sonnet-4.6`) that writes a note when the run is stuck while the worker keeps its model and memory, a stop once the fix verifies, a `run_python` tool, and lessons built from 28 recorded runs ($0.31) and used leave-one-out. Arms A to C were not changed.
+- Measured it on the same 12 evaluation tasks: 11 of 12 fixed for $1.17 ($0.107 per fix), margin +$2.68, against arm C's 9 of 12 and +$1.97. It fixed all three tasks C lost and lost one that every other arm fixed. One run per task and no ablation, so which change helped most is not known ([`docs/notes/arm-d-evaluation.md`](docs/notes/arm-d-evaluation.md)).
+
 ## Demo
 
 Not available yet.

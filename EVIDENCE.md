@@ -13,6 +13,8 @@ run `make verify` to regenerate `docs/results.md` from it and fail if it differs
 - What changed between them: graph context for the agent, then the quote and the governor, built in the session the checkpoint below records (its Sessions and Changes views); the measured effect and where it did not help are in [`docs/notes/arm-c-evaluation.md`](docs/notes/arm-c-evaluation.md).
 - How the 12 evaluation tasks (and 4 calibration tasks) were chosen, and which candidates were rejected and why: [`docs/notes/task-curation.md`](docs/notes/task-curation.md).
 
+- A fourth version built after an audit of the 56 recorded runs ([`docs/notes/audit-2026-10-11.md`](docs/notes/audit-2026-10-11.md)): arm D, with a coach model that writes a note when the run is stuck, a stop once the fix verifies, a `run_python` tool and lessons learned from other tasks. It fixed 11 of 12 at $0.107 per fix with a margin of +$2.68, against arm C's 9 of 12 and +$1.97 ([`docs/notes/arm-d-evaluation.md`](docs/notes/arm-d-evaluation.md), including what it does not show).
+
 ## You used neatlogs
 - Traces tagged `arm:A`, `arm:B`, `arm:C`: [screenshot of the trace list](docs/evidence/trace-list.jpg): 64 traces in the window, the newest 25 shown. Each trace carries four tags (`arm:`, `task:`, `split:`, `version:`), visible on its trace page. The red "Execution Failed" badges mark failed calls that were retried or recovered: the test-timeout demo (1), the API-overload demo (2) and a real API timeout on `mistune-420`.
 - Span kinds used: WORKFLOW, AGENT, TOOL, GUARDRAIL (governor, verifier, recoveries), plus LLM spans with tokens and cost.
@@ -38,6 +40,7 @@ run `make verify` to regenerate `docs/results.md` from it and fail if it differs
 - Public repository with dated commits: https://github.com/JemIIahh/margin/commits/main (first commit 2026-10-10).
 
 ## Known limits
+- Arm D was measured after the benchmark, on later code (from commit `cfa2362`), with its four changes together (no ablation) and one run per task. Its lessons were written from the arm A to C runs of other tasks in the same repositories and are used leave-one-out; building them cost $0.31, which is not in any run's cost.
 - The target tests are visible to the agent. The tools refuse writes to test files and test infrastructure (`conftest.py`, pytest, tox and setup config, `sitecustomize.py`, `.pth` files, anything under a `tests` directory, and any module or package named `pytest`, `_pytest` or `pluggy`), and before judging every change to those paths is reverted, so editing or adding tests cannot change the verdict; the ledger records which test paths the agent touched. A test that passed at the base commit and is now skipped or missing counts as a regression. A fix that legitimately needs to change a config file such as `pyproject.toml` could not be judged solved; none of the 16 tasks does.
 - The governor's check before each call uses an optimistic estimate of that call (warm-cache prompt reads plus the expected output), so one call can carry spend slightly past the cap; receipts show the actual cost.
 - Runs that fail for infrastructure reasons (the API after retries, a harness error) are recorded with `infra_error` and excluded from every reported number; their spend still counts against the batch budget guard.

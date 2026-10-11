@@ -195,6 +195,28 @@ def render_results(ledger: Ledger, flat: dict) -> str:
             cell("C", task_id, _verdict), cell("C", task_id, governor),
         ]
         lines.append("| " + " | ".join(cells) + " |")
+    d_rows = by_arm.get("D", {})
+    if d_rows:  # arm D: arm C plus a coach when stuck, stop-when-verified, run_python and lessons from other tasks
+        lines += [
+            "",
+            "## Arm D per task",
+            "",
+            (
+                "Arm D is arm C with a coach (a stronger model that writes a note when the run is stuck) instead of the "
+                "downgrade, a stop once the fix verifies, a `run_python` tool, and lessons from other tasks of the same "
+                "repository. See `docs/notes/arm-d-evaluation.md`."
+            ),
+            "",
+            "| Task | D band | D price | D cost | D | Coach notes |",
+            "|---|---|---|---|---|---|",
+        ]
+        for task_id in sorted(d_rows):
+            row = d_rows[task_id]
+            band = f"${row.quote['lo']:.2f}–${row.quote['hi']:.2f}" if row.quote else "n/a"
+            notes = sum(1 for e in row.rung_events if e.get("rung") == "COACH")
+            lines.append(
+                f"| {task_id} | {band} | ${row.price_usd:.2f} | ${row.cost_usd:.2f} | {_verdict(row)} | {notes} |"
+            )
     return "\n".join(lines) + "\n"
 
 

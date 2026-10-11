@@ -260,3 +260,20 @@ def test_a_lesson_that_tells_the_agent_to_write_tests_is_never_given_to_it():
         Lesson("t1", repo, "Read the grouping engine before the filters."),
     ]
     assert lessons_for("t2", repo, lessons, limit=5) == ["Read the grouping engine before the filters."]
+
+
+def test_the_results_page_has_an_arm_d_table_with_its_coach_notes_when_d_has_runs(tmp_path):
+    from margin.bench.report import render_results
+    from margin.ledger import Ledger
+    from test_ledger import rec
+    from test_results import FLAT, build_ledger
+
+    ledger = build_ledger(tmp_path)
+    assert "## Arm D per task" not in render_results(Ledger(ledger.path), FLAT)
+    ledger.append(rec(run_id="D0", task="e1", arm="D", cost=0.5, price=2.4, quote={"p50": 1.2, "lo": 0.8, "hi": 1.6},
+                      rung_events=[{"turn": 8, "rung": "COACH", "reason": "no progress in 8 turns"}]))
+    ledger.append(rec(run_id="D1", task="e2", arm="D", solved=False, cost=0.7, price=2.4, quote={"p50": 1.2, "lo": 0.8, "hi": 1.6}))
+    page = render_results(Ledger(ledger.path), FLAT)
+    assert "## Arm D per task" in page
+    assert "| e1 | $0.80–$1.60 | $2.40 | $0.50 | verified | 1 |" in page
+    assert "| e2 | $0.80–$1.60 | $2.40 | $0.70 | not verified | 0 |" in page
