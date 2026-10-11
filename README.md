@@ -175,6 +175,7 @@ a row to `runs/ledger.jsonl`.
 
 - **Small sample.** 12 evaluation issues, one run per task and arm, one cheap worker model. A difference of one or two tasks is within the
   run-to-run noise of the same code.
+- **Larger fixes are not shown.** On three harder real issues (fixes of 50 to 330 source lines, in repositories 1.6 to 14 times larger than any the quoter had seen) none was fixed: each run stopped at its cap or turn limit before an edit, and nothing was billed ([`docs/notes/stress-test.md`](docs/notes/stress-test.md)).
 - **Needs tests.** Margin judges a fix by tests that go from failing to passing, so an issue without such tests cannot be priced yet.
 - **Not a security boundary.** Test code runs as the same user and the network is not blocked; the intake gate is a second layer, and its
   attacks were templates we wrote.
