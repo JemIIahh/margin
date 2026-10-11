@@ -22,6 +22,8 @@ run `make verify` to regenerate `docs/results.md` from it and fail if it differs
 
 - A fifth version, arm E, hands three decisions in arm D to TypeSafe's Jev (an intake gate, a per-turn progress judge, a lesson picker). It matched arm D, 11 of 12 at $0.108 per fix, with about 30% less spent on coaching and under one cent of Jev for all 12 jobs ([`docs/notes/arm-e-evaluation.md`](docs/notes/arm-e-evaluation.md)).
 
+- A live test on an issue outside the benchmark: Python-Markdown #1647, in a repository the task search never mined, fixed upstream eight days before the run. Arm E quoted $0.022 to $0.112 (price $0.168), was coached once at turn 8, and verified a one-line fix for $0.069 (margin $0.099). A review after the run found what the tests did not: the worker's regex slows exponentially on long unclosed tags, though the coach's suggestion did not; and the run's environment could not load 364 extension tests, which a re-check then passed ([`docs/notes/live-test.md`](docs/notes/live-test.md)).
+
 ## You used neatlogs
 - Traces tagged `arm:A`, `arm:B`, `arm:C`: [screenshot of the trace list](docs/evidence/trace-list.jpg): 64 traces in the window, the newest 25 shown. Each trace carries four tags (`arm:`, `task:`, `split:`, `version:`), visible on its trace page. The red "Execution Failed" badges mark failed calls that were retried or recovered: the test-timeout demo (1), the API-overload demo (2) and a real API timeout on `mistune-420`.
 - Span kinds used: WORKFLOW, AGENT, TOOL, GUARDRAIL (governor, verifier, recoveries), plus LLM spans with tokens and cost.

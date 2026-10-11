@@ -193,5 +193,6 @@ a row to `runs/ledger.jsonl`.
 
 - [`EVIDENCE.md`](EVIDENCE.md): every claim, linked to something you can open
 - [`docs/notes/audit-2026-10-11.md`](docs/notes/audit-2026-10-11.md): the audit of 56 recorded runs that led to arms D and E
+- [`docs/notes/live-test.md`](docs/notes/live-test.md): one live run on a bug outside the benchmark, and what its tests did not catch
 - [`hackathon.md`](hackathon.md): the build log
 - [`docs/superpowers/specs/2026-10-10-margin-design.md`](docs/superpowers/specs/2026-10-10-margin-design.md): the design
