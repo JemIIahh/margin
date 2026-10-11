@@ -235,13 +235,37 @@ def cmd_cfo_inputs(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_lessons_build(args: argparse.Namespace) -> int:
+    import json
+
+    from margin.ledger import Ledger
+    from margin.lessons import build_lessons, save_lessons, select_runs
+    from margin.model import make_model_client
+    from margin.pricing import PriceTable
+
+    settings = Settings.from_env()
+    tasks = {t.id: t for t in load_tasks(_tasks_path(args, settings))}
+    runs = select_runs(Ledger(settings.ledger_path).rows())
+    model = args.model or settings.coach_model or settings.main_model
+    lessons, cost = build_lessons(
+        runs, settings.runs_dir, {k: t.repo for k, t in tasks.items()}, client=make_model_client(settings), model=model,
+        prices=PriceTable.load(settings.pricing_path), issue_of=lambda task_id: tasks[task_id].issue_text(settings.root),
+    )
+    out = Path(args.out or settings.lessons_path)
+    save_lessons(out, lessons)
+    meta = {"model": model, "runs": len(runs), "lessons": len(lessons), "cost_usd": round(cost, 6)}
+    out.with_suffix(".meta.json").write_text(json.dumps(meta, indent=2) + "\n")
+    print(f"{len(lessons)} lessons from {len(runs)} runs -> {out} (model {model}, cost ${cost:.4f})")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="margin")
     sub = parser.add_subparsers(dest="command", required=True)
 
     run = sub.add_parser("run", help="run one task with one arm")
     run.add_argument("--task", required=True)
-    run.add_argument("--arm", required=True, choices=["A", "B", "C"])
+    run.add_argument("--arm", required=True, choices=["A", "B", "C", "D"])
     run.add_argument("--tasks-file", default=None)
     run.add_argument("--run-id", default=None)
     run.add_argument("--version", default="v1")
@@ -254,7 +278,7 @@ def build_parser() -> argparse.ArgumentParser:
     validate.add_argument("--tasks-file", default=None)
     validate.set_defaults(func=cmd_tasks_validate)
     bench = sub.add_parser("bench", help="run one arm over many tasks")
-    bench.add_argument("--arm", required=True, choices=["A", "B", "C"])
+    bench.add_argument("--arm", required=True, choices=["A", "B", "C", "D"])
     bench.add_argument("--split", default="all", choices=["all", "calibration", "evaluation"])
     bench.add_argument("--version", default="v1")
     bench.add_argument("--tasks-file", default=None)
@@ -282,6 +306,13 @@ def build_parser() -> argparse.ArgumentParser:
 
     snap = sub.add_parser("snapshot-ledger", help="copy runs/ledger.jsonl to docs/evidence/ledger.jsonl")
     snap.set_defaults(func=cmd_snapshot_ledger)
+    lessons = sub.add_parser("lessons", help="build arm D's lessons from the recorded runs")
+    lessons_sub = lessons.add_subparsers(dest="lessons_command", required=True)
+    build = lessons_sub.add_parser("build", help="post-mortems of recorded runs into bench/lessons.jsonl (model calls)")
+    build.add_argument("--model", default=None, help="model for the post-mortems (default: the coach model)")
+    build.add_argument("--out", default=None)
+    build.add_argument("--tasks-file", default=None)
+    build.set_defaults(func=cmd_lessons_build)
     cfo = sub.add_parser("cfo-inputs", help="write the measured numbers and prompt for the cfo.ai plan")
     cfo.add_argument("--ledger", default=None)
     cfo.add_argument("--flat", default=None)

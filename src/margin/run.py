@@ -37,6 +37,11 @@ def _initial_context(graph: Any, issue: str, root: Path, settings: Settings, sta
     return naive_context(root, settings.naive_context_chars)
 
 
+def _abort_reason(stop: str, reason: str | None) -> str | None:
+    """A run that finished on its own, or that arm D ended because its fix had verified, did not stop early."""
+    return None if stop in ("end_turn", "verified") else (reason or stop)
+
+
 @span(kind="WORKFLOW", name="margin.run")
 def execute_run(
     task: Task,
@@ -53,7 +58,7 @@ def execute_run(
     after_turn_hook: Any = None,
     trace_tags: list[str] | None = None,
 ) -> RunRecord:
-    if arm not in ("A", "B", "C"):
+    if arm not in ("A", "B", "C", "D"):
         raise ValueError(f"unknown arm {arm!r}")
     prices = PriceTable.load(settings.pricing_path)
     ledger = Ledger(settings.ledger_path)
@@ -86,7 +91,7 @@ def execute_run(
     quote: dict | None = None
     price = 0.0  # arms A and B are priced at report time (flat price)
     governor: Any = NullGovernor()
-    if arm in ("B", "C"):
+    if arm in ("B", "C", "D"):
         from margin.context import GraphContext  # added in Task 15
         from margin.quote import extract_features  # added in Task 14
 
@@ -94,7 +99,7 @@ def execute_run(
         feats = extract_features(issue, sandbox.root, prep.baseline_seconds, graph)
         features = feats.to_dict()
         state.log("features", **features)
-        if arm == "C":
+        if arm in ("C", "D"):
             from margin.quote import Quoter, training_rows  # added in Task 14
 
             saved = state.events("quote") if resume else []
@@ -102,7 +107,8 @@ def execute_run(
                 quote = {k: saved[-1][k] for k in ("p50", "lo", "hi")}
                 price = saved[-1]["price"]
             else:
-                quoted = Quoter(training_rows(history_ledger(settings.root, settings.ledger_path), exclude=task.id), prior_cost=settings.default_cost_usd).quote(feats)
+                history = history_ledger(settings.root, settings.ledger_path)
+                quoted = Quoter(training_rows(history, exclude=task.id), prior_cost=settings.default_cost_usd).quote(feats)
                 quote = {"p50": quoted.p50, "lo": quoted.lo, "hi": quoted.hi}
                 price = quoted.price(settings.target_markup)
                 state.log("quote", price=price, **quote)
@@ -112,9 +118,15 @@ def execute_run(
     executor = ToolExecutor(
         sandbox=sandbox, arm=arm, baseline=prep.baseline, target_nodeids=task.target_tests,
         target_junit_ids=task.target_junit_ids, test_args=task.test_args, protected_paths=task.test_files,
-        issue_text=issue, graph=graph, faults=faults, state=state,
+        issue_text=issue, graph=graph, faults=faults, state=state, python_timeout_s=settings.python_timeout_s,
     )
     context = _initial_context(graph, issue, sandbox.root, settings, state)
+    lessons = None
+    if arm == "D":  # what earlier jobs in this repository taught, never a lesson about this task itself
+        from margin.lessons import lessons_for, load_lessons
+
+        lessons = lessons_for(task.id, task.repo, load_lessons(settings.lessons_path), settings.lessons_max)
+        state.log("lessons", count=len(lessons))
     checkpoint = state.load_checkpoint() if resume else None
     if resume:  # even with no checkpoint yet: calls made before the kill were paid for and are in the event log
         state.restore_meter(meter)
@@ -124,7 +136,7 @@ def execute_run(
     try:
         model_client = client or make_model_client(settings)
         result = run_agent(
-            first_prompt=first_prompt(issue, context, task.target_tests), arm=arm,
+            first_prompt=first_prompt(issue, context, task.target_tests, lessons), arm=arm,
             client=model_client, meter=meter, governor=governor, executor=executor,
             state=state, prices=prices, settings=settings, faults=faults, resume=checkpoint,
             after_turn_hook=after_turn_hook,
@@ -170,7 +182,7 @@ def execute_run(
     elif harness_error:
         abort_reason = f"harness error: {harness_error}"
     else:
-        abort_reason = None if result.stop == "end_turn" else (result.abort_reason or result.stop)
+        abort_reason = _abort_reason(result.stop, result.abort_reason)
     revenue, margin = settle(price, verdict.solved, meter.total_usd)
     record = RunRecord(
         run_id=run_id, task_id=task.id, arm=arm, split=task.split, solved=verdict.solved,

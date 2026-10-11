@@ -12,12 +12,17 @@ Rules:
 - If a tool returns an error, read it and adjust. Do not repeat the same call unchanged."""
 
 
-def first_prompt(issue: str, context: str, target_nodeids: list[str]) -> str:
+def first_prompt(issue: str, context: str, target_nodeids: list[str], lessons: list[str] | None = None) -> str:
     targets = "\n".join(f"- {t}" for t in target_nodeids)
+    learned = (
+        "## Lessons from earlier jobs in this repository\n" + "\n".join(f"- {x}" for x in lessons) + "\n\n"
+        if lessons else ""
+    )
     return (
         "Fix this issue in the repository checked out in the working directory.\n\n"
         f"## Issue\n{issue}\n\n"
         f"## Target tests (currently failing; they must pass)\n{targets}\n\n"
+        f"{learned}"
         f"## Repository context\n{context}\n\n"
         "Make the smallest change that makes the target tests pass without breaking other tests. "
         "Use run_tests to check your work."

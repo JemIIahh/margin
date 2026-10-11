@@ -290,6 +290,17 @@ class Sandbox:
                 return [f"({what} from the worktree did not complete)"]
         return []
 
+    def run_python(self, code: str, timeout_s: int) -> tuple[int, str]:
+        """Run a snippet with the repository importable, as the tests run. The file lives outside the worktree."""
+        self.home.mkdir(parents=True, exist_ok=True)
+        script = self.home / "snippet.py"
+        script.write_text(code, encoding="utf-8")
+        proc = subprocess.run(
+            [str(self.venv_python), str(script)], cwd=self.root, env=self.scrubbed_env(), capture_output=True, text=True,
+            timeout=timeout_s, check=False,
+        )
+        return proc.returncode, proc.stdout + proc.stderr
+
     def run_pytest(
         self, args: list[str], junit_path: Path, timeout_s: int | None = None
     ) -> subprocess.CompletedProcess:

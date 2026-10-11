@@ -7,6 +7,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
+from margin.agent.coach import ask_coach, coach_digest, coach_note
 from margin.agent.prompts import SYSTEM_PROMPT, digest_prompt, narrow_notice
 from margin.agent.tools import tool_schemas
 from margin.config import Settings
@@ -19,7 +20,7 @@ from margin.telemetry import coerce, record_failure, trace
 
 @dataclass
 class AgentResult:
-    stop: str  # end_turn | abort | narrow_exhausted | max_turns | refusal | error
+    stop: str  # end_turn | verified | abort | narrow_exhausted | max_turns | refusal | error
     turns: int
     abort_reason: str | None = None
     final_text: str = ""
@@ -97,6 +98,10 @@ def run_agent(
     model, effort = settings.main_model, settings.main_effort
     rung_events: list[dict] = []
     narrow_until: int | None = None
+    # arm D: a coach instead of the downgrade, and an end to the run once the fix has verified
+    coaching = arm == "D"
+    coach_model = settings.coach_model or settings.main_model
+    coach_notes, last_progress_turn, green_turn = 0, 0, None
     if resume:
         messages, turn = resume["messages"], resume["turn"]
         model, effort = resume["model"], resume["effort"]
@@ -104,32 +109,55 @@ def run_agent(
         narrow_until = resume["extra"].get("narrow_until")
         executor.progress.restore(resume["extra"].get("progress", {}))
         governor.restore(resume["rung"], resume["extra"].get("governor_seen", 0))
+        coach_notes = resume["extra"].get("coach_notes", 0)
+        last_progress_turn = resume["extra"].get("last_progress_turn", turn)
+        green_turn = resume["extra"].get("green_turn")
     else:
         messages, turn = [{"role": "user", "content": first_prompt}], 0
+    seen_progress = executor.progress.events
     last_prompt_tokens = max(1, len(str(messages)) // 3)
     tools = tool_schemas(arm)
 
     def result(stop: str, reason: str | None = None, final_text: str = "") -> AgentResult:
         return AgentResult(stop, turn, reason, final_text, rung_events, messages)
 
+    def log_rung(rung: str, reason: str) -> None:
+        event = {"turn": turn, "rung": rung, "reason": reason, "spend": round(meter.total_usd, 6)}
+        rung_events.append(event)
+        state.log("rung", **event)
+        with trace(
+            "governor", kind="GUARDRAIL",
+            **{"margin.rung": rung, "margin.spend_usd": meter.total_usd, "margin.reason": reason},
+        ):
+            pass
+
+    def coach(reason: str) -> None:
+        nonlocal coach_notes, last_progress_turn
+        coach_notes += 1
+        last_progress_turn = turn  # give the worker time to act on the note before judging it stuck again
+        log_rung("COACH", reason)
+        note = ask_coach(client, coach_model, coach_digest(executor, messages), meter=meter, state=state)
+        if note:
+            _append_notice(messages, coach_note(note))
+
     while turn < settings.max_turns:
         est = prices.estimate_next_call(model, last_prompt_tokens, settings.expected_output_tokens)
         decision = governor.check(meter.total_usd, est, executor.progress.events)
-        if decision.changed:
-            event = {
-                "turn": turn, "rung": decision.rung.name, "reason": decision.reason,
-                "spend": round(meter.total_usd, 6),
-            }
-            rung_events.append(event)
-            state.log("rung", **event)
-            with trace(
-                "governor", kind="GUARDRAIL",
-                **{"margin.rung": decision.rung.name, "margin.spend_usd": meter.total_usd, "margin.reason": decision.reason},
-            ):
-                pass
+        stuck_on_budget = coaching and decision.changed and decision.rung == Rung.DOWNGRADE
+        if decision.changed and not stuck_on_budget:  # on arm D the stuck rung is logged as the coach's note below
+            log_rung(decision.rung.name, decision.reason)
         if decision.rung == Rung.ABORT:
             return result("abort", decision.reason)
-        if decision.changed and decision.rung == Rung.DOWNGRADE:
+        if executor.progress.events > seen_progress:
+            seen_progress, last_progress_turn = executor.progress.events, turn
+        if coaching and coach_notes < settings.coach_max_notes and not getattr(executor, "green", False):
+            if stuck_on_budget:
+                coach(decision.reason)
+            elif decision.changed and decision.rung == Rung.NARROW:
+                coach(f"{decision.reason}; no fix verified yet")
+            elif turn - last_progress_turn >= settings.coach_stall_turns:
+                coach(f"no progress in {turn - last_progress_turn} turns")
+        if decision.changed and decision.rung == Rung.DOWNGRADE and not coaching:
             model, effort = settings.fallback_model, settings.fallback_effort
             digest = executor.digest()
             messages = [
@@ -204,14 +232,22 @@ def run_agent(
             else:
                 messages.append({"role": "user", "content": notice})
 
+        if coaching:  # stop when verified: a green full run that the agent keeps working past ends the run
+            if not getattr(executor, "green", False):
+                green_turn = None
+            elif green_turn is None:
+                green_turn = turn
         state.save_checkpoint(
             turn=turn, messages=messages, model=model, effort=effort, rung=governor.rung.name,
             extra={
                 "rung_events": rung_events, "narrow_until": narrow_until,
                 "progress": executor.progress.to_dict(), "governor_seen": getattr(governor, "seen_progress", 0),
+                "coach_notes": coach_notes, "last_progress_turn": last_progress_turn, "green_turn": green_turn,
             },
         )
         if after_turn_hook is not None:
             after_turn_hook(turn)
+        if green_turn is not None and turn - green_turn >= settings.stop_after_green_turns:
+            return result("verified", None)
 
     return result("max_turns", "turn limit reached")

@@ -126,7 +126,7 @@ def _timeout_caveat(latest: dict[str, dict[str, RunRecord]]) -> list[str]:
 
 def render_results(ledger: Ledger, flat: dict) -> str:
     flat_price = flat["flat_price_usd"]
-    latest = {arm: ledger.latest(arm) for arm in ("A", "B", "C")}
+    latest = {arm: ledger.latest(arm) for arm in ("A", "B", "C", "D")}
     priced = {arm: apply_flat_price(rows.values(), flat_price) for arm, rows in latest.items()}
     evaluation = {
         arm: sorted((r for r in rows if r.split == "evaluation"), key=lambda r: r.task_id)

@@ -36,6 +36,14 @@ class Settings:
     test_timeout_s: int = 120
     run_timeout_s: int = 7200  # one benchmark run, as a subprocess; a hung run must not block the batch
     fault: str | None = None
+    # arm D: a coach model instead of the downgrade, stop-when-verified, run_python, lessons from past runs
+    coach_model: str = ""  # empty: the main model coaches
+    coach_max_notes: int = 2
+    coach_stall_turns: int = 8
+    stop_after_green_turns: int = 2
+    python_timeout_s: int = 20
+    lessons_path: Path = ROOT / "bench" / "lessons.jsonl"
+    lessons_max: int = 5
 
     @classmethod
     def from_env(cls, env: Mapping[str, str] | None = None) -> Settings:
@@ -60,6 +68,8 @@ _ENV_FIELDS = [
     ("MARGIN_MAIN_MODEL", "main_model", str),
     ("MARGIN_FALLBACK_MODEL", "fallback_model", str),
     ("MARGIN_FAULT", "fault", str),
+    ("MARGIN_COACH_MODEL", "coach_model", str),
+    ("MARGIN_COACH_STALL_TURNS", "coach_stall_turns", int),
 ]
 
 

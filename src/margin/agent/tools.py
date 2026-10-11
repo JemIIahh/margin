@@ -1,4 +1,4 @@
-"""The agent's tools. Arms A, B and C share one executor; only the backends differ."""
+"""The agent's tools. Every arm shares one executor; only the backends and the tool list differ."""
 from __future__ import annotations
 
 import subprocess
@@ -95,9 +95,19 @@ SCHEMAS = {
     ),
     "run_tests": _schema("run_tests", "Run the tests and report the results.", {}, []),
     "git_diff": _schema("git_diff", "Show the current patch against the starting commit.", {}, []),
+    "run_python": _schema(
+        "run_python",
+        "Run a short Python snippet with the repository importable and show its output and exit code, for example to "
+        "reproduce the issue the way it describes. It has a time limit.",
+        {"code": _STR},
+        ["code"],
+    ),
 }
 _BASE = ["read_file", "search_code", "edit_file", "write_file", "run_tests", "git_diff"]
-ARM_TOOLS = {"A": list(_BASE), "B": [*_BASE, "graph_impact"], "C": [*_BASE, "graph_impact"]}
+ARM_TOOLS = {
+    "A": list(_BASE), "B": [*_BASE, "graph_impact"], "C": [*_BASE, "graph_impact"],
+    "D": [*_BASE, "graph_impact", "run_python"],
+}
 
 
 def tool_schemas(arm: str) -> list[dict]:
@@ -146,6 +156,7 @@ class ToolExecutor:
         graph: Any = None,
         faults: Any = None,
         state: Any = None,
+        python_timeout_s: int = 20,
     ):
         self.sandbox = sandbox
         self.arm = arm
@@ -161,6 +172,8 @@ class ToolExecutor:
         self.progress = ProgressTracker(initial_failing=len(self.target_junit_ids))
         self.last_tests_text = ""
         self._test_runs = 0
+        self.python_timeout_s = python_timeout_s
+        self.green = False  # arm D: the last full test run verified the fix and nothing has been edited since
 
     # --- dispatch ----------------------------------------------------------------
     def execute(self, name: str, args: Any) -> ToolOutput:
@@ -228,12 +241,14 @@ class ToolExecutor:
     def _tool_edit_file(self, path, old, new) -> ToolOutput:
         self._guard_write(path)
         self.sandbox.edit_file(path, old, new)
+        self.green = False
         self.progress.note_edit()
         return ToolOutput(f"edited {path}")
 
     def _tool_write_file(self, path, content) -> ToolOutput:
         self._guard_write(path)
         self.sandbox.write_file(path, content)
+        self.green = False
         self.progress.note_edit()
         return ToolOutput(f"wrote {path}")
 
@@ -241,7 +256,7 @@ class ToolExecutor:
         return ToolOutput(self.sandbox.git_diff() or "(no changes)")
 
     def _tool_run_tests(self) -> ToolOutput:
-        full = self.arm in ("B", "C")
+        full = self.arm in ("B", "C", "D")
         args = list(self.test_args) if full else list(self.target_nodeids)
         junit = self.sandbox.home / f"junit-{self._test_runs}.xml"
         self._test_runs += 1
@@ -277,5 +292,19 @@ class ToolExecutor:
                 f"Full suite: {len(run.passed)} passed, {len(run.failed)} failed "
                 f"({len(self.baseline.failing)} already failing at the base commit)"
             )
+        if self.arm == "D":
+            self.green = full and not failing_targets and not new
+            if self.green:
+                lines.append(
+                    "All target tests pass and nothing that passed before fails: the fix verifies. "
+                    "Reply with one sentence describing the fix and finish; do not change anything else."
+                )
         self.last_tests_text = "\n".join(lines)
         return ToolOutput(self.last_tests_text)
+
+    def _tool_run_python(self, code) -> ToolOutput:
+        try:
+            exit_code, output = self.sandbox.run_python(code, self.python_timeout_s)
+        except subprocess.TimeoutExpired:
+            return ToolOutput(f"error: the snippet timed out after {self.python_timeout_s}s", True)
+        return ToolOutput(self._scrub(f"exit code {exit_code}\n{output}" if output else f"exit code {exit_code}"))
