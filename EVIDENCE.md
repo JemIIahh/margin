@@ -24,6 +24,8 @@ run `make verify` to regenerate `docs/results.md` from it and fail if it differs
 
 - A live test on an issue outside the benchmark: Python-Markdown #1647, in a repository the task search never mined, fixed upstream eight days before the run. Arm E quoted $0.022 to $0.112 (price $0.168), was coached once at turn 8, and verified a one-line fix for $0.069 (margin $0.099). A review after the run found what the tests did not: the worker's regex slows exponentially on long unclosed tags, though the coach's suggestion did not; and the run's environment could not load 364 extension tests, which a re-check then passed ([`docs/notes/live-test.md`](docs/notes/live-test.md)).
 
+- How other agents are priced, and what Margin combines that we did not find elsewhere: [`docs/notes/landscape.md`](docs/notes/landscape.md) (public pricing pages checked 2026-10-11, with the unverified items marked).
+
 ## You used neatlogs
 - Traces tagged `arm:A`, `arm:B`, `arm:C`: [screenshot of the trace list](docs/evidence/trace-list.jpg): 64 traces in the window, the newest 25 shown. Each trace carries four tags (`arm:`, `task:`, `split:`, `version:`), visible on its trace page. The red "Execution Failed" badges mark failed calls that were retried or recovered: the test-timeout demo (1), the API-overload demo (2) and a real API timeout on `mistune-420`.
 - Span kinds used: WORKFLOW, AGENT, TOOL, GUARDRAIL (governor, verifier, recoveries), plus LLM spans with tokens and cost.
