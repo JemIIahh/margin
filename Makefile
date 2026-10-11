@@ -8,3 +8,5 @@ lint:
 verify:
 	uv run pytest
 	uv run margin report --check
+	uv run margin console --check
+	uv run margin guide --check

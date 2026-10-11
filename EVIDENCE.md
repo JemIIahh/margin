@@ -9,6 +9,11 @@ run `make verify` to regenerate `docs/results.md` from it and fail if it differs
 
 ## The agent improved
 - Before and after, 12 evaluation tasks: [`docs/results.md`](docs/results.md).
+- Watch it: the recorded runs replayed as a film of one job, a proof page for all 12 bugs and five versions, and a what-if for the markup
+  and the cap, at https://margin-agent.vercel.app (source [`docs/console.html`](docs/console.html), built by `uv run margin console` and
+  checked by `make verify`). An illustrated tour of how a job runs, with its numbers drawn from the same data, at
+  https://margin-agent.vercel.app/guide ([`docs/guide.html`](docs/guide.html), built by `uv run margin guide`). Both are replays of the
+  recorded runs, not a live service, and the what-if is an exploration of recorded spend, not a measured result.
 - Same task, `marshmallow-2900`: arm A (naive, flat price) run `marshmallow-2900-A-20261010-145224-b903` ended not verified at $0.23; arm C (quote, cap, graph context) run `marshmallow-2900-C-20261010-183320-b1c6` verified at $0.14. Screenshots of the two traces in neatlogs: [arm A](docs/evidence/trace-arm-a.jpg) and [arm C](docs/evidence/trace-arm-c.jpg). The first model call carries 33,582 tokens in arm A (whole files as context) and 2,916 in arm C (graph context).
 - What changed between them: graph context for the agent, then the quote and the governor, built in the session the checkpoint below records (its Sessions and Changes views); the measured effect and where it did not help are in [`docs/notes/arm-c-evaluation.md`](docs/notes/arm-c-evaluation.md).
 - How the 12 evaluation tasks (and 4 calibration tasks) were chosen, and which candidates were rejected and why: [`docs/notes/task-curation.md`](docs/notes/task-curation.md).
@@ -49,6 +54,9 @@ run `make verify` to regenerate `docs/results.md` from it and fail if it differs
 - Public repository with dated commits: https://github.com/JemIIahh/margin/commits/main (first commit 2026-10-10).
 
 ## Known limits
+- The console and the guide only replay what the committed ledger and event logs hold. They call no model and take no input, the guide
+  refuses to build if a sentence it says (for example that no job in versions C, D or E finished over its cap) is not true of that
+  data, and both inherit the caveats on arms D and E below.
 - Arm E, like every arm, was run once per task. A second run of arms D and E, and runs of an unprotected agent on the injected issues, were planned and not made, to keep the event allowance for the demo. Issue text and short run digests are sent to TypeSafe when arm E or the gate runs; the injected issues are templates we wrote, so the gate's detection is an upper bound.
 - Arm D was measured after the benchmark, on later code (from commit `cfa2362`), with its four changes together (no ablation) and one run per task. Its lessons were written from the arm A to C runs of other tasks in the same repositories and are used leave-one-out; building them cost $0.31, which is not in any run's cost.
 - The target tests are visible to the agent. The tools refuse writes to test files and test infrastructure (`conftest.py`, pytest, tox and setup config, `sitecustomize.py`, `.pth` files, anything under a `tests` directory, and any module or package named `pytest`, `_pytest` or `pluggy`), and before judging every change to those paths is reverted, so editing or adding tests cannot change the verdict; the ledger records which test paths the agent touched. A test that passed at the base commit and is now skipped or missing counts as a regression. A fix that legitimately needs to change a config file such as `pyproject.toml` could not be judged solved; none of the 16 tasks does.

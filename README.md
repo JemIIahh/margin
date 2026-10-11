@@ -10,6 +10,11 @@ cost and the margin.
 Built during neatHack 2026 (10 and 11 October) with [neatlogs](https://neatlogs.com), [Entire](https://entire.io),
 [cfo.ai](https://cfo.ai) and [TypeSafe](https://typesafe.ai).
 
+**See it:** [margin-agent.vercel.app](https://margin-agent.vercel.app) replays the recorded runs (a film of one job, a proof page for all
+12 bugs and five versions, and a what-if for the markup and the spending cap), and [its guide](https://margin-agent.vercel.app/guide) walks
+one job from issue to invoice with the commands to run it yourself. Both pages are generated from this repository's ledger
+(`docs/console.html`, `docs/guide.html`); neither is a hosted service.
+
 ---
 
 ## The problem
@@ -119,9 +124,11 @@ Checked on a fresh clone with no `.env`:
 ```bash
 git clone https://github.com/JemIIahh/margin.git && cd margin
 uv sync
-make verify                                 # 397 tests, offline; regenerates docs/results.md from the stored ledger and checks it
+make verify                                 # 467 tests, offline; regenerates docs/results.md from the stored ledger and checks it
 uv run margin quote --task tabulate-241     # free, no model call: the price band, learned from the published ledger
 open docs/receipts.html                     # one card per recorded run, verified and not verified
+open docs/console.html                      # the recorded runs as a film, a proof page and a what-if
+open docs/guide.html                        # an illustrated tour of one job, with the commands
 ```
 
 `margin quote` prints `cost band $0.0668 - $0.4451 (p50 $0.1724) from 15 past runs; price $0.6677` for that task. It needs `git`, `uv`,
@@ -162,7 +169,7 @@ a row to `runs/ledger.jsonl`.
 | `src/margin/jev.py`, `intake.py`, `lessons.py` | TypeSafe's Jev as judge and gate, and lessons from past runs |
 | `src/margin/run.py`, `ledger.py`, `bench/` | one run end to end, the ledger and receipts, the benchmark runner and reports |
 | `bench/tasks.toml` | the 16 benchmark tasks ([how they were chosen](docs/notes/task-curation.md)) |
-| `docs/` | results, receipts page, evidence, business plan and the notes behind every number |
+| `docs/` | results, receipts page, the replay console and the illustrated guide, evidence, business plan and the notes behind every number |
 
 ## Limitations
 

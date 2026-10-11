@@ -297,6 +297,109 @@ def cmd_snapshot_ledger(args: argparse.Namespace) -> int:
     return 0
 
 
+def _console_inputs(args: argparse.Namespace, settings: Settings) -> tuple:
+    """The ledger snapshot and flat price both console commands read; the second item is an error message."""
+    import json
+
+    from margin.ledger import Ledger
+
+    evidence = settings.root / "docs" / "evidence"
+    flat_path = Path(args.flat or settings.root / "bench" / "flat_price.json")
+    if not flat_path.exists():
+        return None, f"{flat_path} is missing; run `uv run margin calibrate-flat` after the arm A calibration runs"
+    ledger = Ledger(Path(args.ledger) if args.ledger else evidence / "ledger.jsonl")
+    return (ledger, json.loads(flat_path.read_text()), evidence), None
+
+
+def cmd_snapshot_replays(args: argparse.Namespace) -> int:
+    import json
+
+    from margin.bench.console import console_data, load_replays
+    from margin.bench.report import load_layout
+
+    settings = Settings.from_env()
+    inputs, error = _console_inputs(args, settings)
+    if error:
+        print(error)
+        return 1
+    ledger, flat, evidence = inputs
+    runs_dir = Path(args.runs_dir) if args.runs_dir else settings.runs_dir
+    replays, _ = load_replays(runs_dir, [row.run_id for row in ledger.rows()])
+    used = console_data(ledger, flat, replays, layout=load_layout(Path(args.layout or settings.root / "bench" / "report.toml")))
+    wanted = {j["run_id"] for jobs in used["jobs"].values() for j in jobs} | {d["run_id"] for d in used["demos"]}
+    missing = sorted(wanted - set(used["replays"]))
+    if missing:
+        print(f"no event log in {runs_dir} for {len(missing)} run(s), e.g. {missing[0]}; the page needs them")
+        return 1
+    out = Path(args.out) if args.out else evidence / "replays.json"
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps(used["replays"], sort_keys=True, separators=(",", ":")) + "\n")
+    print(f"wrote {out} ({len(used['replays'])} runs)")
+    return 0
+
+
+def _console_page_data(args: argparse.Namespace, settings: Settings, *, with_links: bool) -> tuple[dict | None, str]:
+    """The data the console and the guide are both drawn from, or None and what to run when an input is missing."""
+    import json
+
+    from margin.bench.console import console_data, load_links, load_task_meta
+    from margin.bench.report import load_layout
+
+    inputs, error = _console_inputs(args, settings)
+    if error:
+        return None, error
+    ledger, flat, evidence = inputs
+    replays_path = Path(args.replays) if args.replays else evidence / "replays.json"
+    if not replays_path.exists():
+        return None, f"{replays_path} is missing; run `uv run margin snapshot-replays` first"
+    links = load_links(Path(args.links) if args.links else evidence / "links.json") if with_links else None
+    meta = load_task_meta(_tasks_path(args, settings), settings.root)
+    layout = load_layout(Path(args.layout or settings.root / "bench" / "report.toml"))
+    return console_data(ledger, flat, json.loads(replays_path.read_text()), links, meta, layout), ""
+
+
+def _write_or_check(out: Path, text: str, check: bool, command: str) -> int:
+    if check:
+        if not out.exists() or out.read_text() != text:
+            print(f"{out} is stale; run `uv run margin {command}`")
+            return 1
+        print(f"{out} is up to date")
+        return 0
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(text)
+    print(f"wrote {out}")
+    return 0
+
+
+def cmd_console(args: argparse.Namespace) -> int:
+    from margin.bench.console import render_console
+
+    settings = Settings.from_env()
+    data, error = _console_page_data(args, settings, with_links=True)
+    if data is None:
+        print(error)
+        return 1
+    return _write_or_check(Path(args.out or settings.root / "docs" / "console.html"), render_console(data), args.check, "console")
+
+
+def cmd_guide(args: argparse.Namespace) -> int:
+    from margin.bench.guide import GuideError, render_guide
+    from margin.bench.tasks import load_tasks
+
+    settings = Settings.from_env()
+    data, error = _console_page_data(args, settings, with_links=False)
+    if data is None:
+        print(error)
+        return 1
+    try:
+        text = render_guide(data, load_tasks(_tasks_path(args, settings)), console_href=args.console_href,
+                            guide_href=args.guide_href, repo_url=args.repo_url)
+    except GuideError as exc:
+        print(f"the guide cannot be built: {exc}")
+        return 1
+    return _write_or_check(Path(args.out or settings.root / "docs" / "guide.html"), text, args.check, "guide")
+
+
 def cmd_cfo_inputs(args: argparse.Namespace) -> int:
     import json
 
@@ -415,6 +518,35 @@ def build_parser() -> argparse.ArgumentParser:
     build.add_argument("--out", default=None)
     build.add_argument("--tasks-file", default=None)
     build.set_defaults(func=cmd_lessons_build)
+    replays = sub.add_parser("snapshot-replays", help="build docs/evidence/replays.json from the run event logs")
+    replays.add_argument("--ledger", default=None)
+    replays.add_argument("--flat", default=None)
+    replays.add_argument("--runs-dir", default=None)
+    replays.add_argument("--layout", default=None, help="bench/report.toml: which version of each arm is its headline")
+    replays.add_argument("--out", default=None)
+    replays.set_defaults(func=cmd_snapshot_replays)
+    console = sub.add_parser("console", help="regenerate docs/console.html from the committed ledger and replays")
+    console.add_argument("--ledger", default=None)
+    console.add_argument("--flat", default=None)
+    console.add_argument("--replays", default=None)
+    console.add_argument("--links", default=None)
+    console.add_argument("--layout", default=None, help="bench/report.toml: which version of each arm is its headline")
+    console.add_argument("--tasks-file", default=None, help="manifest with the repo, issue link and issue file per task")
+    console.add_argument("--out", default=None)
+    console.add_argument("--check", action="store_true", help="fail if the page is out of date")
+    console.set_defaults(func=cmd_console)
+    guide = sub.add_parser("guide", help="regenerate docs/guide.html, the illustrated tour of how a job works")
+    guide.add_argument("--ledger", default=None)
+    guide.add_argument("--flat", default=None)
+    guide.add_argument("--replays", default=None)
+    guide.add_argument("--layout", default=None, help="bench/report.toml: which version of each arm is its headline")
+    guide.add_argument("--tasks-file", default=None, help="manifest with the repo, issue link and issue file per task")
+    guide.add_argument("--out", default=None)
+    guide.add_argument("--console-href", default="console.html", help="where the console page is, relative to the guide")
+    guide.add_argument("--guide-href", default="guide.html", help="where the guide page is, relative to itself")
+    guide.add_argument("--repo-url", default="https://github.com/JemIIahh/margin")
+    guide.add_argument("--check", action="store_true", help="fail if the page is out of date")
+    guide.set_defaults(func=cmd_guide)
     cfo = sub.add_parser("cfo-inputs", help="write the measured numbers and prompt for the cfo.ai plan")
     cfo.add_argument("--ledger", default=None)
     cfo.add_argument("--flat", default=None)
