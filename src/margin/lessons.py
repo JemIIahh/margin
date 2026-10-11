@@ -6,6 +6,7 @@ measured on what it learned from other jobs, not on a hint about the answer.
 from __future__ import annotations
 
 import json
+import re
 from collections.abc import Callable, Iterable
 from dataclasses import asdict, dataclass
 from pathlib import Path
@@ -48,10 +49,16 @@ def save_lessons(path: Path, lessons: Iterable[Lesson]) -> None:
     Path(path).write_text("".join(json.dumps(asdict(x), sort_keys=True) + "\n" for x in lessons), encoding="utf-8")
 
 
+# The tools refuse every write to a test file, so advice to add or write tests only leads the agent into refused calls.
+_WRITES_TESTS = re.compile(r"\b(add|adding|write|writing|create|creating)\b[^.]{0,60}\btests?\b", re.IGNORECASE)
+
+
 def lessons_for(task_id: str, repo: str, lessons: Iterable[Lesson], limit: int) -> list[str]:
     """Lessons from other tasks of the same repository, without duplicates, in the order they were learned."""
     chosen: list[str] = []
     for lesson in lessons:
+        if _WRITES_TESTS.search(lesson.text):
+            continue
         if lesson.repo == repo and lesson.task_id != task_id and lesson.text not in chosen:
             chosen.append(lesson.text)
         if len(chosen) >= limit:

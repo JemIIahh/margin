@@ -248,3 +248,15 @@ def test_progress_tracker_is_unchanged_for_the_other_arms():
     tracker = ProgressTracker(initial_failing=2)
     tracker.note_tests(2)
     assert tracker.events == 0
+
+
+def test_a_lesson_that_tells_the_agent_to_write_tests_is_never_given_to_it():
+    from margin.lessons import Lesson, lessons_for
+
+    repo = "https://github.com/x/y"
+    lessons = [
+        Lesson("t1", repo, "Before writing any fix, add the failing test case first and run it."),
+        Lesson("t1", repo, "When adding a validator, also add parametrised test cases to tests/test_validate.py."),
+        Lesson("t1", repo, "Read the grouping engine before the filters."),
+    ]
+    assert lessons_for("t2", repo, lessons, limit=5) == ["Read the grouping engine before the filters."]
