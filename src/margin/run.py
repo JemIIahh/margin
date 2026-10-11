@@ -25,7 +25,8 @@ from margin.verify import Verdict, final_verdict
 
 
 def new_run_id(task_id: str, arm: str) -> str:
-    return f"{task_id}-{arm}-{time.strftime('%Y%m%d-%H%M%S')}-{uuid.uuid4().hex[:4]}"
+    # 8 hex digits: two ids made in the same second collide about once in four billion, not once in 65,536
+    return f"{task_id}-{arm}-{time.strftime('%Y%m%d-%H%M%S')}-{uuid.uuid4().hex[:8]}"
 
 
 def _initial_context(graph: Any, issue: str, root: Path, settings: Settings, state: RunState) -> str:

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 from pathlib import Path
 
 from margin.bench.tasks import find_task, load_tasks
@@ -213,6 +214,11 @@ def cmd_resume(args: argparse.Namespace) -> int:
         print(f"{args.run_id} already finished; nothing to resume")
         return 1
     meta = json.loads((settings.runs_dir / args.run_id / "meta.json").read_text())
+    if meta["arm"] == "E" and not os.environ.get("TYPESAFE_API_KEY"):  # say so before preparing anything
+        from margin.jev import NO_KEY
+
+        print(NO_KEY)
+        return 2
     task = find_task(load_tasks(_tasks_path(args, settings)), meta["task_id"])
     tags = [
         f"arm:{meta['arm']}", f"task:{task.id}", f"split:{task.split}", f"version:{meta['version']}", "resumed:true"

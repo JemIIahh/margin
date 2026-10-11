@@ -104,7 +104,7 @@ def run_agent(
     coaching = arm in ("D", "E")
     judging = arm == "E" and judge is not None  # arm E: Jev judges progress each turn instead of the fixed stall rule
     coach_model = settings.coach_model or settings.main_model
-    coach_notes, last_progress_turn, green_turn = 0, 0, None
+    coach_notes, last_progress_turn, green_turn, judge_failures = 0, 0, None, 0
     last_coach_turn = last_nudge_turn = -(10**6)
     if resume:
         messages, turn = resume["messages"], resume["turn"]
@@ -152,22 +152,30 @@ def run_agent(
     while turn < settings.max_turns:
         est = prices.estimate_next_call(model, last_prompt_tokens, settings.expected_output_tokens)
         decision = governor.check(meter.total_usd, est, executor.progress.events)
+        can_coach = coaching and coach_notes < settings.coach_max_notes and not getattr(executor, "green", False)
         stuck_on_budget = coaching and decision.changed and decision.rung == Rung.DOWNGRADE
-        if decision.changed and not stuck_on_budget:  # on arm D the stuck rung is logged as the coach's note below
+        # on arms D and E the stuck rung is logged as the coach's note below, unless no note can be given
+        if decision.changed and not (stuck_on_budget and can_coach):
             log_rung(decision.rung.name, decision.reason)
         if decision.rung == Rung.ABORT:
             return result("abort", decision.reason)
         if executor.progress.events > seen_progress:
             seen_progress, last_progress_turn = executor.progress.events, turn
         verdict = None
+        judge_blip = False  # a failed Jev call this turn that is not yet an outage
         if judging and turn >= settings.judge_warmup_turns and not getattr(executor, "green", False):
             verdict = judge.assess(executor, messages)
             if verdict is not None:  # Jev's tokens are part of the run's cost like any other call
+                judge_failures = 0
                 jev_usage = Usage(input_tokens=verdict.input_tokens)
                 jev_cost = meter.record(JEV_MODEL, jev_usage)
                 state.log("model_usage", model=JEV_MODEL, usage=jev_usage.to_dict(), cost=round(jev_cost, 8), stop="judge", role="judge")
                 state.log("judge", turn=turn, **verdict.nouls)
-        if coaching and coach_notes < settings.coach_max_notes and not getattr(executor, "green", False):
+            else:  # arm D's stall rule takes over only once Jev has failed several turns in a row
+                judge_failures += 1
+                judge_blip = judge_failures < settings.judge_fallback_after
+                state.log("judge_unavailable", turn=turn, consecutive=judge_failures)
+        if can_coach:
             if stuck_on_budget:
                 coach(decision.reason)
             elif decision.changed and decision.rung == Rung.NARROW:
@@ -176,7 +184,7 @@ def run_agent(
                 stuck = verdict.nouls["ready_to_edit"] < settings.judge_unready_below
                 if stuck and turn - last_coach_turn >= settings.judge_min_gap:
                     coach(f"Jev judged the run stuck: {describe(verdict)}")
-            elif turn - last_progress_turn >= settings.coach_stall_turns:
+            elif not judge_blip and turn - last_progress_turn >= settings.coach_stall_turns:
                 coach(f"no progress in {turn - last_progress_turn} turns")
         if (
             verdict is not None and verdict.nouls["ready_to_edit"] >= settings.judge_ready_at and exploring(messages)

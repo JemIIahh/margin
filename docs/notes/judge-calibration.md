@@ -33,7 +33,9 @@ Medians: `progress` 0.33 (productive) against 0.34 (stuck), `repeating` 0.67 aga
 - `progress` and `repeating` did not separate the groups, so they are logged for analysis but decide nothing.
 - The free nudge to edit is sent when `ready_to_edit >= 0.65` and the agent's last three calls only looked around
   (5 productive samples reached that level, no stuck one).
-- If Jev is unavailable, arm E falls back to arm D's rule (8 turns without a progress event).
+- If Jev fails three turns in a row, arm E falls back to arm D's rule (8 turns without a progress event) until Jev
+  answers again; a single failed call is treated as a blip, and every failure is logged as `judge_unavailable`. The
+  recorded arm E runs used the earlier rule, which fell back on any turn whose Jev call failed.
 
 ## Limits
 

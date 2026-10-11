@@ -50,6 +50,7 @@ class Settings:
     judge_unready_below: float = 0.40  # coach: the agent still does not know what to change
     judge_ready_at: float = 0.65  # nudge: it knows what to change but keeps exploring
     judge_min_gap: int = 4
+    judge_fallback_after: int = 3  # failed Jev calls in a row before arm D's stall rule takes over
 
     @classmethod
     def from_env(cls, env: Mapping[str, str] | None = None) -> Settings:

@@ -115,8 +115,14 @@ def build_lessons(
         response = client.create(**params)
         meter.record(model, Usage.from_api(response.usage))
         reply = "".join(getattr(b, "text", "") for b in response.content if getattr(b, "type", "") == "text")
-        for line in reply.splitlines():
-            line = line.strip()
-            if line.startswith("- ") and len(line) > 4:
-                lessons.append(Lesson(row.task_id, repo_of[row.task_id], line[2:].strip(), row.run_id))
+        lessons += [Lesson(row.task_id, repo_of[row.task_id], text, row.run_id) for text in lesson_lines(reply)]
     return lessons, meter.total_usd
+
+
+_LESSON_LINE = re.compile(r"^(?:[-*•]|\d+[.)])\s+(.+)$")
+
+
+def lesson_lines(reply: str) -> list[str]:
+    """The lessons in a postmortem reply: the prompt asks for "- " lines, but a numbered or starred list counts too."""
+    found = (_LESSON_LINE.match(line.strip()) for line in reply.splitlines())
+    return [m.group(1).strip() for m in found if m and len(m.group(1).strip()) > 2]

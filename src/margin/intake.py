@@ -165,7 +165,10 @@ class IntakeGate:
 
 def make_gate(thresholds: IntakeThresholds | None = None) -> IntakeGate:
     if not os.environ.get("TYPESAFE_API_KEY"):
-        raise IntakeUnavailable("TYPESAFE_API_KEY is not set; add it to .env or run without --gate")
+        raise IntakeUnavailable(
+            "the intake gate needs TYPESAFE_API_KEY in .env (create a key at console.typesafe.ai); "
+            "it is part of arm E and `margin intake`, and arms A to D run without it"
+        )
     from typesafe_sdk import RetryPolicy, TypeSafeClient
 
     return IntakeGate(TypeSafeClient(retry=RetryPolicy(max_retries=2, timeout=15.0)), thresholds)

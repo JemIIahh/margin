@@ -103,7 +103,20 @@ def test_the_graph_subprocess_never_sees_api_keys(tmp_path, monkeypatch):
     assert env["PATH"] and env["HOME"]
 
 
+def real_search_with_one_retry(root, query, top_k=3):
+    """The real CLI on this repository. It failed once while other processes ran and passed on every rerun; the failure
+    was not reproduced (8 and 32 concurrent searches, full CPU load, file churn, a held git index lock). So one failed
+    call is retried, and two in a row fail the test with both errors, to show the cause if it happens again."""
+    errors = []
+    for _ in range(2):
+        try:
+            return GraphContext(root).search(query, top_k=top_k)
+        except GraphError as exc:
+            errors.append(str(exc))
+    raise AssertionError("entire graph search failed twice: " + " | ".join(errors))
+
+
 @pytest.mark.skipif(shutil.which("entire") is None, reason="entire CLI is not installed")
 def test_real_graph_search_finds_code_in_this_repo():
-    out = GraphContext(ROOT).search("price table cost of a model call", top_k=3)
+    out = real_search_with_one_retry(ROOT, "price table cost of a model call")
     assert ".py" in out

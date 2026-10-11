@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from margin.agent.coach import recent_calls
-from margin.intake import USD_PER_MTOK_INPUT
+from margin.intake import CHARS_PER_TOKEN, PROMPT_OVERHEAD_TOKENS, USD_PER_MTOK_INPUT
 
 JEV_MODEL = "jev-latest"  # the price row in pricing.toml has the same name
 
@@ -37,8 +37,16 @@ EDIT_NUDGE = (
 _EXPLORING = {"read_file", "search_code", "graph_impact", "run_python", "git_diff"}
 
 
+NO_KEY = "arm E needs TYPESAFE_API_KEY in .env (create a key at console.typesafe.ai); arms A to D run without it"
+
+
 class JevUnavailable(RuntimeError):
     pass
+
+
+def _estimated_tokens(state: Any, payload: dict) -> int:
+    sent = json.dumps(state, default=str) + json.dumps(payload, default=str)
+    return len(sent) // CHARS_PER_TOKEN + PROMPT_OVERHEAD_TOKENS
 
 
 @dataclass(frozen=True)
@@ -59,16 +67,18 @@ class Jev:
         try:
             result = self.client.system_one(state, payload)
             values = {name: float(result.nouls[name].noul) for name in questions}
-            tokens = int(getattr(getattr(result, "usage", None), "input_tokens", 0) or 0)
+            reported = getattr(getattr(result, "usage", None), "input_tokens", None)
         except Exception:  # noqa: BLE001 - an unavailable judge must not end a paid run
             return None
+        # A reply without a usage figure was still paid for: estimate it as the intake gate does, never meter it as free.
+        tokens = int(reported) if reported is not None else _estimated_tokens(state, payload)
         self.input_tokens += tokens
         return JevAnswers(values, tokens, tokens * USD_PER_MTOK_INPUT / 1_000_000)
 
 
 def make_jev() -> Jev:
     if not os.environ.get("TYPESAFE_API_KEY"):
-        raise JevUnavailable("arm E needs TYPESAFE_API_KEY in .env (create a key at console.typesafe.ai)")
+        raise JevUnavailable(NO_KEY)
     from typesafe_sdk import RetryPolicy, TypeSafeClient
 
     return Jev(TypeSafeClient(retry=RetryPolicy(max_retries=2, timeout=15.0)))

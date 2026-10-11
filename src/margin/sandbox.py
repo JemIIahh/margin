@@ -8,12 +8,15 @@ and a fingerprint of the git config, hooks and `.git` pointer aborts the run if 
 Network access is not blocked (vetted tasks need none); evidence docs state this limit.
 The `run_python` snippets of arms D and E run as the same user with the same scrubbed environment as the tests,
 so a snippet can start its own subprocesses: like test code, it is confined by the vetting of the task, not by an
-operating-system boundary.
+operating-system boundary. Each snippet runs in its own process group, which is killed when the snippet ends or
+times out, so nothing it starts outlives it unless it deliberately leaves the group.
 """
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import os
+import signal
 import subprocess
 from pathlib import Path
 
@@ -39,6 +42,11 @@ _TEST_INFRA_NAMES = {
 # `python -m pytest` runs with the worktree first on sys.path, so a module or package named like the runner would
 # replace it. The probe in `Sandbox.pytest_shadowed_by` checks what actually resolves; these names are the cheap first line.
 _RUNNER_NAMES = {"pytest", "_pytest", "pluggy"}
+
+
+def _kill_group(pgid: int) -> None:
+    with contextlib.suppress(ProcessLookupError, PermissionError):  # already gone
+        os.killpg(pgid, signal.SIGKILL)
 
 
 def is_test_path(rel: str) -> bool:
@@ -298,11 +306,21 @@ class Sandbox:
         self.home.mkdir(parents=True, exist_ok=True)
         script = self.home / "snippet.py"
         script.write_text(code, encoding="utf-8")
-        proc = subprocess.run(
-            [str(self.venv_python), str(script)], cwd=self.root, env=self.scrubbed_env(), capture_output=True, text=True,
-            timeout=timeout_s, check=False,
+        proc = subprocess.Popen(
+            [str(self.venv_python), str(script)], cwd=self.root, env=self.scrubbed_env(), stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE, text=True, start_new_session=True,  # its own group: whatever it starts dies with it
         )
-        return proc.returncode, proc.stdout + proc.stderr
+        try:
+            out, err = proc.communicate(timeout=timeout_s)
+        except subprocess.TimeoutExpired:
+            _kill_group(proc.pid)
+            proc.wait()
+            raise
+        finally:
+            _kill_group(proc.pid)  # background processes left by a snippet that exited normally
+            for pipe in (proc.stdout, proc.stderr):
+                pipe.close()
+        return proc.returncode, out + err
 
     def run_pytest(
         self, args: list[str], junit_path: Path, timeout_s: int | None = None
