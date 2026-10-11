@@ -1,35 +1,82 @@
 # Demo script (about three minutes)
 
-**Status: numbers filled from the live runs; links and the cfo.ai figures are still blank (`[ ... ]`).** Record the video only after
-`make verify` passes, and watch it once with the sound off to confirm every on-screen step is readable. It must name all three
-tools: neatlogs, Entire and cfo.ai. Say plainly that the model is `claude-haiku` through the event's proxy and that this is 12
-tasks with one run each.
+**The story:** agents are hard to price; an audit of our own runs found where the money went; a coach, a cheap judge (TypeSafe's Jev) and
+a stop rule fixed it; every job ends with a receipt that proves the cost. Name all four tools on screen: neatlogs, Entire, cfo.ai and
+TypeSafe. Say once that this is 12 real issues with one run each, on the event's `claude-haiku`.
 
-## 0:00 to 0:30, the problem
-- One sentence: agents are hard to price, because the cost of a task varies wildly and a failed run still costs money.
-- Show the arm A receipts: the same agent spent $0.06 on `moreitertools-1308` and $0.30 on `sqlparse-826`, and the second one was
-  **not verified**, so a flat $0.30 price would have billed nothing for $0.30 of spend (arm A: 8 of 12 verified, gross margin 13%).
+## Before recording
 
-## 0:30 to 1:30, the product
-- `uv run margin quote --task tabulate-241`: the cost band $0.07 to $0.45 (p50 $0.17) from 15 past runs, price $0.67.
-- `uv run margin run --task tabulate-241 --arm C`, live or recorded: quote, hard cap, fix, verify. The recorded run verified at $0.13,
-  margin +$0.54.
-- A fault, then the recovery: `MARGIN_FAULT=tool_timeout uv run margin run --task moreitertools-1308 --arm C --version demo-fault-timeout`
-  (tests time out, the run falls back to the target tests and still verifies; `docs/evidence/failure-recovery.md`).
-- The governor acting with its stated reason: `marshmallow-2249`, DOWNGRADE at turn 16 ("no progress at 67% of the cap"), NARROW at
-  turn 29; it ended not verified at $0.13 and billed nothing. Say that the governor did not win here (the quote's upper band, $0.15,
-  was below the $0.17 the task needed) and show the receipt and `docs/receipts.html`.
-- The kill and resume: `scripts/resume_demo.sh tomlkit-619 C` (killed after its first checkpoint, resumed, verified, spend counted once).
+- **Budget:** the only live model spend is one short arm E run (about $0.03 per take) and a few Jev calls (about $0.0001 each). Ten takes
+  stay under $0.50. `margin quote` and everything shown from files or the web is free.
+- **Privacy:** run the terminal full screen with a plain prompt (`export PS1='$ '`), keep `.env` closed, collapse the neatlogs sidebar
+  (your name is in it), and use full-screen browser windows so tabs and addresses do not show.
+- **Warm-up:** run `uv run margin intake --task sqlparse-826` once before recording; the first Jev call of the day can take about 10 seconds.
+- Run `make verify` first; it should print `374 passed` and `docs/results.md is up to date`.
 
-## 1:30 to 2:15, neatlogs and Entire
-- neatlogs: one run's trace (`margin.run` with `turn-N`, `claude-haiku` and tool spans, 91 steps for `sqlparse-772` on arm B) and its four tags
-  `arm:`, `task:`, `split:`, `version:` [ link or screenshot ]; the `failed:*` then `recovery:*` spans of a fault run [ link ].
-  The dashboard's own cost column reads $0 for the proxy model; the cost story is the ledger and the receipts.
-- Entire: the checkpoint page, Sessions then Changes [ link ]; entire-graph at runtime, and the measured result, arm A versus arm B:
-  cost per solved fix $0.26 against $0.11, mean tokens per solved fix 836,552 against 336,605 (`docs/results.md`). Do not present
-  `docs/evidence/graph-stats.txt` as a savings figure: it covers the build sessions, not the agent.
+## 0:00 to 0:25, the problem
 
-## 2:15 to 3:00, cfo.ai and the close
-- The cfo.ai plan: price [ $ ], margin [ % ] and runway [ months ], built from the measured arm C numbers: median cost $0.09,
-  90th percentile $0.14, verified on 75% of jobs, $0.13 per verified fix (`docs/business/inputs.md`; arm B was better on every one of those).
-- `make verify` passing; the repository link; the checkpoint link and id.
+Show the README's opening and its results table.
+
+> "AI agents can fix real bugs, but nobody can price that work. In our benchmark the same naive agent spent 6 cents on one issue and 30 on
+> another, and the 4 issues it failed still cost money. Margin quotes a price before the work, controls spend during it, and only bills
+> when the repository's own tests prove the fix."
+
+## 0:25 to 1:10, the product, live
+
+```bash
+uv run margin intake --task sqlparse-826                              # gate: accept (injection about 0.09, actionable about 0.97)
+uv run margin intake --task moreitertools-1308 --variant inj-10       # same issue with a planted instruction to the agent: decline (injection about 0.98)
+uv run margin quote --task tabulate-241                               # cost band $0.0668 - $0.4451 (p50 $0.1724) from 15 past runs; price $0.6677
+MARGIN_COACH_MODEL=claude-sonnet-4.6 uv run margin run --task moreitertools-1308 --arm E --version demo-video   # about 70 s, about $0.03
+cat runs/<the run id it prints>/receipt.md
+```
+
+> "TypeSafe's Jev screens the issue before we spend anything, and blocks one that tries to instruct the agent. The quote comes from past
+> jobs. The run is capped, the tests decide, and the receipt shows the price, the cost and the margin."
+
+The `--version demo-video` tag keeps these takes out of the benchmark numbers. The run prints the receipt's full path, which includes your
+macOS user name; crop that line or show only the `cat` output.
+
+## 1:10 to 1:55, how it got better
+
+Show `docs/notes/audit-2026-10-11.md` (findings 1 and 2), then this recorded arm E receipt:
+
+```bash
+cat runs/sqlparse-826-E-20261011-074735-d39c/receipt.md
+```
+
+It reads: quoted band $0.0504 to $0.3357, price $0.5035, cost $0.1567, **verified**, margin $0.3468, and two coach decisions, the first
+"Jev judged the run stuck: ... ready_to_edit 0.2".
+
+> "We audited 56 of our own runs. Agents kept spending after the fix had passed, and our governor made stuck agents weaker by switching to
+> a cheaper model. So now the run stops once the tests prove the fix, and when Jev judges that the agent does not know what to change, a
+> stronger coach writes it a note. On this issue the naive agent and our first governed agent both failed; this run was coached at turn 8
+> and verified."
+
+Then the results table in `docs/results.md`: naive agent 8 of 12 at $0.261 per fix and 13% gross margin; arms D and E 11 of 12 at
+$0.107 and $0.108, about 70%. Spend after a verified fix fell from 18% to 5%.
+
+## 1:55 to 2:30, the proof: neatlogs and Entire
+
+- **neatlogs:** the trace list with the red "Execution Failed" rows (`docs/evidence/trace-list.jpg`), the arm A and arm C traces of the same
+  issue side by side (33,582 against 2,916 tokens in the first call), and the resumed run that starts at `turn-2` after a `kill -9`.
+- **Entire:** the public checkpoint page,
+  https://entire.io/gh/JemIIahh/margin/commit/5ad9776bfaa59fb58de2c6bb05778623b56fd78d, and one line: entire-graph is the agent's code
+  search, which is where the 91% token saving comes from.
+
+> "Every turn, tool call, governor decision and recovery is a trace in neatlogs. The build itself is recorded in Entire."
+
+## 2:30 to 3:00, the business and the close
+
+Show `docs/business/README.md`:
+
+> "We built the plan in cfo.ai from the measured costs. At 34 cents per verified fix the gross margin is 59%, but at a thousand jobs a month
+> it does not yet cover fixed costs; at 60 cents it is 75% and profitable. Every number in this video is regenerated from the stored ledger
+> by `make verify`, and every claim is linked in EVIDENCE.md."
+
+End on the repository: https://github.com/JemIIahh/margin
+
+## After recording
+
+Watch it once with the sound off to check every step is readable, check no frame shows your name, tabs, address bar or `.env`, then send
+the video link for the submission text.
