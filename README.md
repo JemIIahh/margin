@@ -28,7 +28,7 @@ AI agents can fix real bugs, but nobody can price that work:
 
 | Step | What happens |
 |---|---|
-| **Screen** | An intake gate (TypeSafe's Jev) checks the issue before any money is spent: is it a real, fixable defect, or text trying to instruct the agent? |
+| **Screen** | An intake gate (TypeSafe's Jev) checks the issue before the agent spends anything: is it a real, fixable defect, or text trying to instruct the agent? |
 | **Quote** | A cost band and a price, learned from past jobs with similar features (issue size, code-graph reach, repository size, test time). |
 | **Govern** | A spending cap from the quote, a governor that reacts at 60% and 85% of it, and a coach model that steps in when the agent is stuck. |
 | **Verify** | The repository's tests decide. Test files and test infrastructure are restored before judging, a probe makes sure pytest is the real one, and a test that passed before and now fails, is skipped or goes missing counts against the fix. |
@@ -37,7 +37,7 @@ AI agents can fix real bugs, but nobody can price that work:
 ```mermaid
 flowchart LR
     I[GitHub issue] --> G{Intake gate}
-    G -- declined --> X[Nothing spent]
+    G -- declined --> X[No agent spend]
     G -- accepted --> Q[Quote: cost band and price]
     Q --> R[Agent run under a spend cap]
     R -- stuck --> C[Coach note]
@@ -73,10 +73,10 @@ Measured on this benchmark (12 tasks, one run each, so read the differences as i
   from 13% to 70%.
 - **91% fewer tokens in the first model call** on the same issue: 33,582 for the naive agent against 2,916 with code-graph context.
 - **Spend after the fix had verified fell from 18% to 5%**, because the run now stops once the tests prove the fix.
-- **Bad jobs are stopped before they cost anything.** On held-out items the intake gate accepted 12 of 12 genuine issues and declined 6 of
-  6 issues with a planted instruction to the agent and 4 of 4 vague ones, for about $0.00005 per issue.
-- **Cheap judgment, used where it matters.** Letting Jev decide when to coach cut coaching spend by about 30%, and all of Jev's judging
-  for 12 jobs cost under one cent.
+- **Bad jobs are stopped before the agent spends anything.** On held-out items the intake gate accepted 12 of 12 genuine issues and
+  declined 6 of 6 issues with a planted instruction to the agent and 4 of 4 vague ones; the screen itself costs about $0.00005 per issue.
+- **Cheap judgment, used where it matters.** Letting Jev decide when to coach gave 11 coach notes instead of 16 and about 30% less
+  coaching spend (one run per task, so indicative), and all of Jev's judging for 12 jobs cost under one cent.
 - **Quotes you can price on.** In a leave-one-out check the actual cost fell inside the quoted band for 14 of 16 tasks.
 - **Failures recover.** An injected flaky test, a test timeout, an API overload and a `kill -9` mid-run each ended in a verified fix, and the
   killed run resumed from its checkpoint with its spend counted once ([`docs/evidence/failure-recovery.md`](docs/evidence/failure-recovery.md)).
@@ -119,7 +119,7 @@ Checked on a fresh clone with no `.env`:
 ```bash
 git clone https://github.com/JemIIahh/margin.git && cd margin
 uv sync
-make verify                                 # 374 tests, offline; regenerates docs/results.md from the stored ledger and checks it
+make verify                                 # 385 tests, offline; regenerates docs/results.md from the stored ledger and checks it
 uv run margin quote --task tabulate-241     # free, no model call: the price band, learned from the published ledger
 open docs/receipts.html                     # one card per recorded run, verified and not verified
 ```

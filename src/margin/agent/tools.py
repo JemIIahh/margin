@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import subprocess
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 from margin.context import GraphError, grep_search
@@ -203,8 +204,15 @@ class ToolExecutor:
                 )
 
     def _scrub(self, text: str) -> str:
-        """Show repository-relative paths only: an absolute worktree or run path names the user's home directory."""
+        """Show repository-relative paths only: an absolute worktree or run path names the user's home directory.
+
+        Interpreter and site-packages paths (in a traceback or `sys.executable`) are outside the run, so the user's
+        home directory itself is shown as `~`.
+        """
         roots = [(self.sandbox.root, "."), (self.sandbox.home, "<home>"), (self.sandbox.root.parent, "<run>")]
+        home = Path.home()
+        if home != Path(home.anchor):  # a home at "/" (some containers) would turn every slash into "~"
+            roots.append((home, "~"))
         for path, shown in sorted(roots, key=lambda item: -len(str(item[0]))):  # the longest first, so none is half replaced
             text = text.replace(str(path), shown)
         return text
@@ -304,6 +312,7 @@ class ToolExecutor:
         return ToolOutput(self.last_tests_text)
 
     def _tool_run_python(self, code) -> ToolOutput:
+        self.green = False  # a snippet can write to the tree, so only a new test run can say the fix still verifies
         try:
             exit_code, output = self.sandbox.run_python(code, self.python_timeout_s)
         except subprocess.TimeoutExpired:

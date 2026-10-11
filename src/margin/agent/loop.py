@@ -116,6 +116,8 @@ def run_agent(
         coach_notes = resume["extra"].get("coach_notes", 0)
         last_progress_turn = resume["extra"].get("last_progress_turn", turn)
         green_turn = resume["extra"].get("green_turn")
+        last_coach_turn = resume["extra"].get("last_coach_turn", last_coach_turn)
+        last_nudge_turn = resume["extra"].get("last_nudge_turn", last_nudge_turn)
     else:
         messages, turn = [{"role": "user", "content": first_prompt}], 0
     seen_progress = executor.progress.events
@@ -140,7 +142,10 @@ def run_agent(
         coach_notes += 1
         last_progress_turn = last_coach_turn = turn  # give the worker time to act on the note before judging it again
         log_rung("COACH", reason)
-        note = ask_coach(client, coach_model, coach_digest(executor, messages), meter=meter, state=state)
+        note = ask_coach(  # retried like the worker's calls; injected faults stay on the worker's calls
+            client, coach_model, coach_digest(executor, messages), meter=meter, state=state,
+            create=lambda params: call_with_retry(client, params, state=state, faults=None, sleep=sleep),
+        )
         if note:
             _append_notice(messages, coach_note(note))
 
@@ -266,6 +271,7 @@ def run_agent(
                 "rung_events": rung_events, "narrow_until": narrow_until,
                 "progress": executor.progress.to_dict(), "governor_seen": getattr(governor, "seen_progress", 0),
                 "coach_notes": coach_notes, "last_progress_turn": last_progress_turn, "green_turn": green_turn,
+                "last_coach_turn": last_coach_turn, "last_nudge_turn": last_nudge_turn,
             },
         )
         if after_turn_hook is not None:

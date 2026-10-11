@@ -11,7 +11,7 @@ TypeSafe. Say once that this is 12 real issues with one run each, on the event's
 - **Privacy:** run the terminal full screen with a plain prompt (`export PS1='$ '`), keep `.env` closed, collapse the neatlogs sidebar
   (your name is in it), and use full-screen browser windows so tabs and addresses do not show.
 - **Warm-up:** run `uv run margin intake --task sqlparse-826` once before recording; the first Jev call of the day can take about 10 seconds.
-- Run `make verify` first; it should print `374 passed` and `docs/results.md is up to date`.
+- Run `make verify` first; it should print `385 passed` and `docs/results.md is up to date`.
 
 ## 0:00 to 0:25, the problem
 
@@ -28,14 +28,14 @@ uv run margin intake --task sqlparse-826                              # gate: ac
 uv run margin intake --task moreitertools-1308 --variant inj-10       # same issue with a planted instruction to the agent: decline (injection about 0.98)
 uv run margin quote --task tabulate-241                               # cost band $0.0668 - $0.4451 (p50 $0.1724) from 15 past runs; price $0.6677
 MARGIN_COACH_MODEL=claude-sonnet-4.6 uv run margin run --task moreitertools-1308 --arm E --version demo-video   # about 70 s, about $0.03
-cat runs/<the run id it prints>/receipt.md
+cat runs/<the run id it prints>/receipt.md                           # the run prints this path for you
 ```
 
-> "TypeSafe's Jev screens the issue before we spend anything, and blocks one that tries to instruct the agent. The quote comes from past
+> "TypeSafe's Jev screens the issue, for a fraction of a cent, before the agent spends anything, and blocks one that tries to instruct the agent. The quote comes from past
 > jobs. The run is capped, the tests decide, and the receipt shows the price, the cost and the margin."
 
-The `--version demo-video` tag keeps these takes out of the benchmark numbers. The run prints the receipt's full path, which includes your
-macOS user name; crop that line or show only the `cat` output.
+The `--version demo-video` tag keeps these takes out of the benchmark numbers. The run prints the receipt's path relative to the
+repository (`receipt: runs/.../receipt.md`), so no line shows your macOS user name.
 
 ## 1:10 to 1:55, how it got better
 

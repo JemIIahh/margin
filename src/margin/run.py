@@ -42,8 +42,54 @@ def _abort_reason(stop: str, reason: str | None) -> str | None:
     return None if stop in ("end_turn", "verified") else (reason or stop)
 
 
+def _require_priced(prices: PriceTable, model: str) -> None:
+    """The coach is paid like the worker: refuse an unpriced coach before anything is spent, not after its first call."""
+    if model not in prices.models:
+        raise ValueError(f"no price for the coach model {model!r}; add it to pricing.toml")
+
+
+def _restored_intake_cost(state: RunState) -> float:
+    """`margin resume` does not screen again, but the original screen was paid for and counts against the run."""
+    screens = state.events("intake")
+    return float(screens[-1].get("cost_usd") or 0.0) if screens else 0.0
+
+
+def _learning(arm, task, issue, settings, state, meter, jev, *, resume=False):
+    """Arms D and E: the lessons for the first prompt, and arm E's progress judge.
+
+    A resumed arm E run reuses the lessons Jev picked before it stopped: picking again would pay Jev twice, and the first
+    pick is already in the event log that the meter is restored from.
+    """
+    from margin.lessons import lessons_for, load_lessons
+
+    if arm == "D":
+        lessons = lessons_for(task.id, task.repo, load_lessons(settings.lessons_path), settings.lessons_max)
+        state.log("lessons", count=len(lessons))
+        return lessons, None
+    from margin.jev import JEV_MODEL, ProgressJudge, make_jev, pick_lessons
+
+    jev = jev or make_jev()
+    judge = ProgressJudge(jev)
+    if resume:
+        picked_before = state.events("lessons_picked")
+        return (picked_before[-1].get("lessons") if picked_before else None), judge
+    eligible = lessons_for(task.id, task.repo, load_lessons(settings.lessons_path), 50)
+    used_before = jev.input_tokens
+    lessons = pick_lessons(issue, eligible, jev, settings.lessons_max)
+    picked = Usage(input_tokens=jev.input_tokens - used_before)  # what Jev reported, metered like any call
+    if picked.input_tokens:
+        cost = meter.record(JEV_MODEL, picked)
+        state.log("model_usage", model=JEV_MODEL, usage=picked.to_dict(), cost=round(cost, 8), stop="lessons", role="judge")
+    state.log("lessons_picked", eligible=len(eligible), chosen=len(lessons), lessons=lessons)
+    state.log("lessons", count=len(lessons))
+    return lessons, judge
+
+
 def _declined(task, arm, run_id, run_dir, started, intake, ledger, tags) -> RunRecord:
-    """A run the gate stopped: only the gate's own spend is lost, and nothing was cloned or run."""
+    """A run the gate stopped: only the gate's own spend is lost, and nothing was cloned or run.
+
+    A gate that could not answer is an outage, not a verdict on the issue, so that row is an infrastructure failure.
+    """
     record = RunRecord(
         run_id=run_id, task_id=task.id, arm=arm, split=task.split, solved=False, cost_usd=intake.cost_usd,
         price_usd=0.0, revenue_usd=0.0, margin_usd=-intake.cost_usd, tokens_total=intake.input_tokens,
@@ -51,6 +97,7 @@ def _declined(task, arm, run_id, run_dir, started, intake, ledger, tags) -> RunR
         duration_s=round(time.time() - started, 1),
         started_at=time.strftime("%Y-%m-%dT%H:%M:%S%z", time.localtime(started)),
         trace_tags=[*tags, "intake:declined"], verdict_reason=f"declined at intake ({intake.decision})",
+        infra_error=any(str(r).startswith("gate unavailable") for r in intake.reasons),
     )
     ledger.append(record)
     (run_dir / "receipt.md").write_text(render_receipt(record))
@@ -83,6 +130,8 @@ def execute_run(
     if ((gate is not None and arm != "E") or variant_id) and not version.startswith("demo"):
         raise ValueError("gated and variant runs are not benchmark runs: use a version starting with 'demo'")
     prices = PriceTable.load(settings.pricing_path)
+    if arm in ("D", "E"):
+        _require_priced(prices, settings.coach_model or settings.main_model)
     ledger = Ledger(settings.ledger_path)
     run_id = run_id or new_run_id(task.id, arm)
     run_dir = settings.runs_dir / run_id
@@ -92,7 +141,7 @@ def execute_run(
     tags = [*(trace_tags or []), *([f"variant:{variant_id}"] if variant_id else [])]
 
     issue = issue_text if issue_text is not None else task.issue_text(tasks_root or settings.root)
-    intake_cost = 0.0
+    intake_cost = _restored_intake_cost(state) if resume else 0.0
     if gate is not None:  # screen untrusted issue text before cloning anything or spending anything
         intake = gate.screen(issue)
         state.log("intake", **intake.to_dict())
@@ -156,24 +205,8 @@ def execute_run(
     lessons = None
     judge = None
     if arm in ("D", "E"):  # what earlier jobs in this repository taught, never a lesson about this task itself
-        from margin.lessons import lessons_for, load_lessons
-
-        if arm == "D":
-            lessons = lessons_for(task.id, task.repo, load_lessons(settings.lessons_path), settings.lessons_max)
-        else:  # arm E: Jev picks the lessons that fit this issue from every eligible one, and judges progress
-            from margin.jev import JEV_MODEL, ProgressJudge, make_jev, pick_lessons
-
-            jev = jev or make_jev()
-            judge = ProgressJudge(jev)
-            eligible = lessons_for(task.id, task.repo, load_lessons(settings.lessons_path), 50)
-            used_before = jev.input_tokens
-            lessons = pick_lessons(issue, eligible, jev, settings.lessons_max)
-            picked = Usage(input_tokens=jev.input_tokens - used_before)  # what Jev reported, metered like any call
-            if picked.input_tokens:
-                cost = meter.record(JEV_MODEL, picked)
-                state.log("model_usage", model=JEV_MODEL, usage=picked.to_dict(), cost=round(cost, 8), stop="lessons", role="judge")
-            state.log("lessons_picked", eligible=len(eligible), chosen=len(lessons))
-        state.log("lessons", count=len(lessons))
+        # arm E: Jev picks the lessons that fit this issue from every eligible one, and judges progress
+        lessons, judge = _learning(arm, task, issue, settings, state, meter, jev, resume=resume)
     checkpoint = state.load_checkpoint() if resume else None
     if resume:  # even with no checkpoint yet: calls made before the kill were paid for and are in the event log
         state.restore_meter(meter)

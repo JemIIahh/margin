@@ -3,7 +3,7 @@
 Arm E is arm D with three decisions handed to Jev, TypeSafe's System One model, which returns typed probabilities instead
 of text. Code owns every decision made from its answers.
 
-1. **Intake gate** (from plan addendum 2): before anything is cloned or spent, Jev rates the issue text on `injection`
+1. **Intake gate** (from plan addendum 2): before anything is cloned or the agent spends anything, Jev rates the issue text on `injection`
    (does it try to instruct the agent?) and `actionable` (is it a concrete defect?). Thresholds were checked on the
    calibration items only ([`intake-calibration.md`](intake-calibration.md)).
 2. **Progress judge**: from turn 8, each turn Jev reads a short digest of the run. Only one of its three answers proved
@@ -39,13 +39,17 @@ inside run-to-run noise. Two E runs hit their spend cap: `marshmallow-2249` with
 | Jev's own cost | none | **$0.0095 for all 12 jobs**: 128 judge calls, the gate and the lesson picker |
 | Nudges to edit | none | 1 |
 
+Arm E's mean of 298,385 tokens per solved fix in [`../results.md`](../results.md) includes Jev's input tokens, about
+17,800 per solved fix; without them it is about 280,600, against arm D's 261,368. The gate's tokens are not in that
+count (the gate's cost is).
+
 The gate accepted all 12 evaluation issues. On its own held-out test (Jev only, no agent) it accepted 12 of 12 clean
 issues and declined 6 of 6 injected and 4 of 4 vague ones ([`../evidence/intake.md`](../evidence/intake.md)).
 
 ## What this does not show
 
 - **That Jev improves the fix rate.** It did not, in this sample: E matched D. Its measured effects are a cheaper, more
-  selective use of the coach and the lessons, and a gate that stops bad issues before any money is spent.
+  selective use of the coach and the lessons, and a gate that stops bad issues before the agent spends anything.
 - **Run-to-run noise.** One run per task. A second run of D and E was planned and cancelled to keep the event allowance for
   the demo.
 - **What an unprotected agent does with the injected issues.** Running the agent ungated on the variants (addendum 2, step 7)

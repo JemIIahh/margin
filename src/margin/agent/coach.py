@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import contextlib
 import json
+from collections.abc import Callable
 from typing import Any
 
 from margin.model import build_request
@@ -66,25 +67,30 @@ def coach_note(note: str) -> str:
 
 
 def ask_coach(
-    client: Any, model: str, digest: str, *, meter: SpendMeter, state: RunState, max_tokens: int = 800
+    client: Any, model: str, digest: str, *, meter: SpendMeter, state: RunState, max_tokens: int = 800,
+    create: Callable[[dict], Any] | None = None,
 ) -> str | None:
-    """One coaching call. A failure returns None: a missing note must never end the worker's run."""
+    """One coaching call. A failed call returns None: a missing note must never end the worker's run.
+
+    `create` sends the request (the loop passes its retrying caller). Metering is outside the error handling: a call
+    that was paid for is always counted, and a model missing from the price table fails loudly instead of going unbilled.
+    """
     params = build_request(
         model=model, effort="low", system=COACH_SYSTEM, tools=[], messages=[{"role": "user", "content": digest}],
         max_tokens=max_tokens,
     )
     params.pop("tools")  # an empty tool list is not a valid request on every provider
-    try:
-        with trace("coach", kind="AGENT", **{"margin.model": model}) as span:
-            response = client.create(**params)
+    with trace("coach", kind="AGENT", **{"margin.model": model}) as span:
+        try:
+            response = create(params) if create is not None else client.create(**params)
             usage = Usage.from_api(response.usage)
-            cost = meter.record(model, usage)
-            state.log("model_usage", model=model, usage=usage.to_dict(), cost=round(cost, 6), stop=response.stop_reason, role="coach")
-            with contextlib.suppress(Exception):
-                span.set_attribute("margin.cost_usd", cost)
-    except Exception as exc:  # noqa: BLE001 - the coach is optional help
-        state.log("coach_error", error=f"{type(exc).__name__}: {exc}"[:300])
-        return None
+        except Exception as exc:  # noqa: BLE001 - the coach is optional help
+            state.log("coach_error", error=f"{type(exc).__name__}: {exc}"[:300])
+            return None
+        cost = meter.record(model, usage)
+        state.log("model_usage", model=model, usage=usage.to_dict(), cost=round(cost, 6), stop=response.stop_reason, role="coach")
+        with contextlib.suppress(Exception):
+            span.set_attribute("margin.cost_usd", cost)
     note = "".join(getattr(b, "text", "") for b in response.content if getattr(b, "type", "") == "text").strip()
     state.log("coach", note=note[:2000])
     return note or None

@@ -6,6 +6,9 @@ scratch so API keys cannot reach repository code. Host-side git is hardened: the
 pinned at construction, git runs in a scrubbed environment with exec-capable config neutralised,
 and a fingerprint of the git config, hooks and `.git` pointer aborts the run if they change.
 Network access is not blocked (vetted tasks need none); evidence docs state this limit.
+The `run_python` snippets of arms D and E run as the same user with the same scrubbed environment as the tests,
+so a snippet can start its own subprocesses: like test code, it is confined by the vetting of the task, not by an
+operating-system boundary.
 """
 from __future__ import annotations
 

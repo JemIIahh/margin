@@ -50,7 +50,8 @@ def cmd_run(args: argparse.Namespace) -> int:
             issue_text=issue_text, gate=gate, variant_id=variant_id,
         )
         print(f"{rec.run_id}: solved={rec.solved} cost=${rec.cost_usd:.4f} margin=${rec.margin_usd:.4f}")
-        print(f"receipt: {settings.runs_dir / rec.run_id / 'receipt.md'}")
+        receipt = settings.runs_dir / rec.run_id / "receipt.md"  # shown from the repository: the full path names the user
+        print(f"receipt: {receipt.relative_to(settings.root) if receipt.is_relative_to(settings.root) else receipt}")
         return 0 if rec.solved else 1
     finally:
         shutdown_telemetry()
