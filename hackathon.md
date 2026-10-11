@@ -63,6 +63,13 @@ Solo. Registered team name: Sofer.
 - Built arm D test-first against those findings: a coach model (`claude-sonnet-4.6`) that writes a note when the run is stuck while the worker keeps its model and memory, a stop once the fix verifies, a `run_python` tool, and lessons built from 28 recorded runs ($0.31) and used leave-one-out. Arms A to C were not changed.
 - Measured it on the same 12 evaluation tasks: 11 of 12 fixed for $1.17 ($0.107 per fix), margin +$2.68, against arm C's 9 of 12 and +$1.97. It fixed all three tasks C lost and lost one that every other arm fixed. One run per task and no ablation, so which change helped most is not known ([`docs/notes/arm-d-evaluation.md`](docs/notes/arm-d-evaluation.md)).
 
+### 2026-10-11 (TypeSafe's Jev, arm E)
+
+- Ported the TypeSafe intake gate from plan addendum 2 and added two more uses of Jev, a per-turn progress judge and a lesson picker, as arm E. Jev returns typed probabilities, and code makes every decision.
+- Calibrated on the calibration tasks only: the gate separated clean issues (0.03 to 0.06 injection) from injected ones (0.97 to 0.99); of the judge's three questions only "does the agent know what to change?" separated stuck runs from working ones (93% caught, 19% false alarms), so only it decides.
+- On the held-out items the gate accepted 12 of 12 genuine issues and declined 6 of 6 injected and 4 of 4 vague ones. Arm E matched arm D on the 12 evaluation tasks (11 of 12, $0.108 per fix) with about 30% less coaching; all of Jev cost under one cent for 12 jobs.
+- Planned repeat runs and unprotected-agent runs were cancelled to keep about $9 of the event allowance for the demo.
+
 ## Demo
 
 Not available yet.

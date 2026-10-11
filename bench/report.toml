@@ -9,5 +9,4 @@ D = "v3-learn"
 E = "v4-jev"
 
 [repeats]
-D = ["v3-learn", "v3-learn-r2"]
-E = ["v4-jev", "v4-jev-r2"]
+# none recorded: a second run of each arm was not made, to keep the event allowance for the demo

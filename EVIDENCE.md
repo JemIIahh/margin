@@ -15,6 +15,8 @@ run `make verify` to regenerate `docs/results.md` from it and fail if it differs
 
 - A fourth version built after an audit of the 56 recorded runs ([`docs/notes/audit-2026-10-11.md`](docs/notes/audit-2026-10-11.md)): arm D, with a coach model that writes a note when the run is stuck, a stop once the fix verifies, a `run_python` tool and lessons learned from other tasks. It fixed 11 of 12 at $0.107 per fix with a margin of +$2.68, against arm C's 9 of 12 and +$1.97 ([`docs/notes/arm-d-evaluation.md`](docs/notes/arm-d-evaluation.md), including what it does not show).
 
+- A fifth version, arm E, hands three decisions in arm D to TypeSafe's Jev (an intake gate, a per-turn progress judge, a lesson picker). It matched arm D, 11 of 12 at $0.108 per fix, with about 30% less spent on coaching and under one cent of Jev for all 12 jobs ([`docs/notes/arm-e-evaluation.md`](docs/notes/arm-e-evaluation.md)).
+
 ## You used neatlogs
 - Traces tagged `arm:A`, `arm:B`, `arm:C`: [screenshot of the trace list](docs/evidence/trace-list.jpg): 64 traces in the window, the newest 25 shown. Each trace carries four tags (`arm:`, `task:`, `split:`, `version:`), visible on its trace page. The red "Execution Failed" badges mark failed calls that were retried or recovered: the test-timeout demo (1), the API-overload demo (2) and a real API timeout on `mistune-420`.
 - Span kinds used: WORKFLOW, AGENT, TOOL, GUARDRAIL (governor, verifier, recoveries), plus LLM spans with tokens and cost.
@@ -23,6 +25,13 @@ run `make verify` to regenerate `docs/results.md` from it and fail if it differs
 - Checkpoint link: https://entire.io/gh/JemIIahh/margin/commit/5ad9776bfaa59fb58de2c6bb05778623b56fd78d (id `01M4KJFZ9SS3FGZ96RS2AERSE8`, commit `5ad9776`).
 - Local checkpoints for every commit, and the state of the privacy review: [`docs/evidence/checkpoints.md`](docs/evidence/checkpoints.md).
 - entire-graph at runtime for search and impact (arms B and C). Its report over the build sessions is in [`docs/evidence/graph-stats.txt`](docs/evidence/graph-stats.txt); note that it covers the *build* sessions, which barely used the graph, so it shows about zero savings. The effect of graph context on Margin's agent is measured as tokens per solved fix, arm A versus arm B, in `docs/results.md`.
+
+## You used TypeSafe (Jev)
+- An intake gate screens each issue before any money is spent: on held-out items it accepted 12 of 12 genuine issues and declined
+  6 of 6 with a planted instruction to the agent and 4 of 4 vague ones ([`docs/evidence/intake.md`](docs/evidence/intake.md)), with
+  thresholds checked on calibration items first ([`docs/notes/intake-calibration.md`](docs/notes/intake-calibration.md)).
+- A progress judge decides when the coach steps in; its one useful question was found by replaying it on recorded calibration runs
+  ([`docs/notes/judge-calibration.md`](docs/notes/judge-calibration.md)).
 
 ## You used cfo.ai
 - Business plan covering pricing, costs, revenue and runway: [`docs/business/`](docs/business/) (exports: [`cfo-pricing.xlsx`](docs/business/cfo-pricing.xlsx), [`cfo-revenue-and-margin.xlsx`](docs/business/cfo-revenue-and-margin.xlsx), [`cfo-cash-and-runway.xlsx`](docs/business/cfo-cash-and-runway.xlsx), [`cfo-scenarios.xlsx`](docs/business/cfo-scenarios.xlsx); summary in [`README.md`](docs/business/README.md)).
@@ -40,6 +49,7 @@ run `make verify` to regenerate `docs/results.md` from it and fail if it differs
 - Public repository with dated commits: https://github.com/JemIIahh/margin/commits/main (first commit 2026-10-10).
 
 ## Known limits
+- Arm E, like every arm, was run once per task. A second run of arms D and E, and runs of an unprotected agent on the injected issues, were planned and not made, to keep the event allowance for the demo. Issue text and short run digests are sent to TypeSafe when arm E or the gate runs; the injected issues are templates we wrote, so the gate's detection is an upper bound.
 - Arm D was measured after the benchmark, on later code (from commit `cfa2362`), with its four changes together (no ablation) and one run per task. Its lessons were written from the arm A to C runs of other tasks in the same repositories and are used leave-one-out; building them cost $0.31, which is not in any run's cost.
 - The target tests are visible to the agent. The tools refuse writes to test files and test infrastructure (`conftest.py`, pytest, tox and setup config, `sitecustomize.py`, `.pth` files, anything under a `tests` directory, and any module or package named `pytest`, `_pytest` or `pluggy`), and before judging every change to those paths is reverted, so editing or adding tests cannot change the verdict; the ledger records which test paths the agent touched. A test that passed at the base commit and is now skipped or missing counts as a regression. A fix that legitimately needs to change a config file such as `pyproject.toml` could not be judged solved; none of the 16 tasks does.
 - The governor's check before each call uses an optimistic estimate of that call (warm-cache prompt reads plus the expected output), so one call can carry spend slightly past the cap; receipts show the actual cost.
