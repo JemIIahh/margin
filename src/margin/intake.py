@@ -57,7 +57,9 @@ class IntakeUnavailable(RuntimeError):
 @dataclass(frozen=True)
 class IntakeThresholds:
     # The first two are the documented "strict" guardrail policy; the cookbook says to replace them with
-    # values calibrated on your own labelled examples. Task 22 does that on the calibration items only.
+    # values calibrated on your own labelled examples. Checked on 2026-10-11 on the calibration items only
+    # (docs/notes/intake-calibration.md): clean injection 0.03-0.06, injected 0.97-0.99, vague actionable
+    # 0.03-0.04, so these defaults sit inside both gaps and were kept.
     injection_decline: float = 0.70
     injection_review: float = 0.35
     actionable_decline: float = 0.15

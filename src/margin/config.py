@@ -44,11 +44,11 @@ class Settings:
     python_timeout_s: int = 20
     lessons_path: Path = ROOT / "bench" / "lessons.jsonl"
     lessons_max: int = 5
-    # arm E: Jev (TypeSafe) judges progress each turn; thresholds are code, not model output
-    judge_warmup_turns: int = 3
-    judge_stuck_below: float = 0.25
-    judge_repeat_at: float = 0.75
-    judge_ready_at: float = 0.8
+    # arm E: Jev (TypeSafe) judges each turn; thresholds are code, chosen on the calibration runs only
+    # (docs/notes/judge-calibration.md): only readiness to edit separated stuck runs from working ones
+    judge_warmup_turns: int = 8
+    judge_unready_below: float = 0.40  # coach: the agent still does not know what to change
+    judge_ready_at: float = 0.65  # nudge: it knows what to change but keeps exploring
     judge_min_gap: int = 4
 
     @classmethod

@@ -28,6 +28,9 @@ class FakeJevClient:
         return SimpleNamespace(nouls=nouls, usage=SimpleNamespace(input_tokens=1000))
 
 
+WARM = Settings(coach_model=COACH, coach_stall_turns=50, judge_warmup_turns=3)
+
+
 def go(tmp_path, replies, jev_values=None, *, fail=False, settings=None):
     from margin.jev import Jev, ProgressJudge
 
@@ -37,7 +40,7 @@ def go(tmp_path, replies, jev_values=None, *, fail=False, settings=None):
     meter = SpendMeter(PRICES)
     result = run_agent(
         first_prompt="FIRST", arm="E", client=client, meter=meter, governor=NullGovernor(), executor=FakeExecutor(),
-        state=state, prices=PRICES, settings=settings or Settings(coach_model=COACH, coach_stall_turns=50),
+        state=state, prices=PRICES, settings=settings or WARM,
         sleep=lambda s: None, judge=ProgressJudge(Jev(jev_client)),
     )
     return result, client, jev_client, state, meter
@@ -74,22 +77,22 @@ def test_arm_e_without_a_typesafe_key_says_so(monkeypatch):
 def test_when_jev_judges_the_run_stuck_the_coach_is_called_without_waiting_for_the_stall_rule(tmp_path):
     note = reply([text("Next step: edit the parser.")])
     replies = [*reads(3), note, *reads(1), reply([text("done")])]
-    result, client, jev_client, state, _meter = go(tmp_path, replies, {"progress": 0.05, "repeating": 0.9, "ready_to_edit": 0.1})
+    result, client, jev_client, state, _meter = go(tmp_path, replies, {"ready_to_edit": 0.1})
     assert sum(c["model"] == COACH for c in client.calls) == 1
     assert result.rung_events[0]["rung"] == "COACH" and "Jev" in result.rung_events[0]["reason"]
     assert any(e["model"] == "jev-latest" for e in state.events("model_usage"))
     assert jev_client.calls and "recent_actions" in jev_client.calls[0][0]
 
 
-def test_when_jev_sees_progress_no_coach_is_called(tmp_path):
+def test_when_jev_judges_the_agent_knows_what_to_change_no_coach_is_called(tmp_path):
     replies = [*reads(6), reply([text("done")])]
-    result, client, *_ = go(tmp_path, replies, {"progress": 0.9, "repeating": 0.05, "ready_to_edit": 0.1})
+    result, client, *_ = go(tmp_path, replies, {"ready_to_edit": 0.6})
     assert not any(c["model"] == COACH for c in client.calls) and result.rung_events == []
 
 
 def test_when_jev_says_the_agent_knows_enough_it_gets_a_free_nudge_to_edit(tmp_path):
     replies = [*reads(5), reply([text("done")])]
-    _result, client, *_ = go(tmp_path, replies, {"progress": 0.9, "repeating": 0.05, "ready_to_edit": 0.95})
+    _result, client, *_ = go(tmp_path, replies, {"ready_to_edit": 0.7})
     assert not any(c["model"] == COACH for c in client.calls)
     sent = str(client.calls[-1]["messages"])
     assert "Edit the code now" in sent
@@ -138,3 +141,16 @@ def test_arm_e_gates_a_benchmark_run_but_other_arms_still_need_a_demo_version(tm
     with pytest.raises(ValueError, match="demo"):
         execute_run(task, "C", settings, tasks_root=tmp_path, client=Client([]), gate=FakeGate("accept"),
                     run_id="r-c", version="v4-jev")
+
+
+def test_progress_and_repetition_are_logged_but_do_not_call_the_coach(tmp_path):
+    """Calibration showed neither separates stuck runs from working ones; readiness to edit does."""
+    replies = [*reads(6), reply([text("done")])]
+    result, client, _jev, state, _meter = go(tmp_path, replies, {"progress": 0.0, "repeating": 1.0, "ready_to_edit": 0.6})
+    assert not any(c["model"] == COACH for c in client.calls) and result.rung_events == []
+    assert state.events("judge") and state.events("judge")[0]["repeating"] == 1.0
+
+
+def test_the_judge_waits_eight_turns_by_default_before_it_can_call_the_coach():
+    settings = Settings()
+    assert settings.judge_warmup_turns == 8 and settings.judge_unready_below == 0.40 and settings.judge_ready_at == 0.65

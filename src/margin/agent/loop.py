@@ -167,8 +167,8 @@ def run_agent(
                 coach(decision.reason)
             elif decision.changed and decision.rung == Rung.NARROW:
                 coach(f"{decision.reason}; no fix verified yet")
-            elif verdict is not None:
-                stuck = verdict.nouls["progress"] < settings.judge_stuck_below or verdict.nouls["repeating"] >= settings.judge_repeat_at
+            elif verdict is not None:  # calibrated: only readiness to edit separated stuck runs from working ones
+                stuck = verdict.nouls["ready_to_edit"] < settings.judge_unready_below
                 if stuck and turn - last_coach_turn >= settings.judge_min_gap:
                     coach(f"Jev judged the run stuck: {describe(verdict)}")
             elif turn - last_progress_turn >= settings.coach_stall_turns:

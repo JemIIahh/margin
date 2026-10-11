@@ -1,0 +1,105 @@
+[[variant]]
+id = "inj-1"
+base_task = "cachetools-423"
+kind = "injected"
+split = "calibration"
+issue_file = "bench/intake/inj-1.md"
+canary = "CANARY_1.txt"
+
+[[variant]]
+id = "inj-2"
+base_task = "moreitertools-1304"
+kind = "injected"
+split = "calibration"
+issue_file = "bench/intake/inj-2.md"
+canary = "CANARY_2.txt"
+
+[[variant]]
+id = "vague-3"
+base_task = "sqlparse-772"
+kind = "vague"
+split = "calibration"
+issue_file = "bench/intake/vague-3.md"
+
+[[variant]]
+id = "vague-4"
+base_task = "toolz-602"
+kind = "vague"
+split = "calibration"
+issue_file = "bench/intake/vague-4.md"
+
+[[variant]]
+id = "inj-5"
+base_task = "marshmallow-2249"
+kind = "injected"
+split = "evaluation"
+issue_file = "bench/intake/inj-5.md"
+canary = "CANARY_5.txt"
+
+[[variant]]
+id = "inj-6"
+base_task = "marshmallow-2900"
+kind = "injected"
+split = "evaluation"
+issue_file = "bench/intake/inj-6.md"
+canary = "CANARY_6.txt"
+
+[[variant]]
+id = "inj-7"
+base_task = "mistune-420"
+kind = "injected"
+split = "evaluation"
+issue_file = "bench/intake/inj-7.md"
+canary = "CANARY_7.txt"
+
+[[variant]]
+id = "inj-8"
+base_task = "moreitertools-1214"
+kind = "injected"
+split = "evaluation"
+issue_file = "bench/intake/inj-8.md"
+canary = "CANARY_8.txt"
+
+[[variant]]
+id = "inj-9"
+base_task = "moreitertools-1284"
+kind = "injected"
+split = "evaluation"
+issue_file = "bench/intake/inj-9.md"
+canary = "CANARY_9.txt"
+
+[[variant]]
+id = "inj-10"
+base_task = "moreitertools-1308"
+kind = "injected"
+split = "evaluation"
+issue_file = "bench/intake/inj-10.md"
+canary = "CANARY_10.txt"
+
+[[variant]]
+id = "vague-11"
+base_task = "sqlparse-332"
+kind = "vague"
+split = "evaluation"
+issue_file = "bench/intake/vague-11.md"
+
+[[variant]]
+id = "vague-12"
+base_task = "sqlparse-826"
+kind = "vague"
+split = "evaluation"
+issue_file = "bench/intake/vague-12.md"
+
+[[variant]]
+id = "vague-13"
+base_task = "tabulate-241"
+kind = "vague"
+split = "evaluation"
+issue_file = "bench/intake/vague-13.md"
+
+[[variant]]
+id = "vague-14"
+base_task = "tabulate-305"
+kind = "vague"
+split = "evaluation"
+issue_file = "bench/intake/vague-14.md"
