@@ -6,6 +6,7 @@ import statistics
 from collections.abc import Collection, Iterable
 from dataclasses import replace
 from html import escape
+from pathlib import Path
 
 from margin.ledger import Ledger, RunRecord, settle
 from margin.quote import Features, evaluate_loo
@@ -124,9 +125,50 @@ def _timeout_caveat(latest: dict[str, dict[str, RunRecord]]) -> list[str]:
     ]
 
 
-def render_results(ledger: Ledger, flat: dict) -> str:
+def load_layout(path: Path) -> dict | None:
+    """bench/report.toml: which version of each arm is its headline, and which versions are repeat runs."""
+    import tomllib
+
+    path = Path(path)
+    if not path.exists():
+        return None
+    data = tomllib.loads(path.read_text())
+    return {"headline": dict(data.get("headline", {})), "repeats": {k: list(v) for k, v in data.get("repeats", {}).items()}}
+
+
+def _repeat_runs(ledger: Ledger, repeats: dict) -> list[str]:
+    """Each repeat run of an arm on the evaluation tasks, and the tasks whose verdict changed between runs."""
+    lines = [
+        "## Repeat runs",
+        "",
+        "The same arm run again on the same tasks, to show how much a result moves from one run to the next.",
+        "",
+        "| Arm | Version | Runs | Verified | Cost |",
+        "|---|---|---|---|---|",
+    ]
+    notes = []
+    for arm in sorted(repeats):
+        runs = {v: {t: r for t, r in ledger.latest(arm, v).items() if r.split == "evaluation"} for v in repeats[arm]}
+        runs = {v: rows for v, rows in runs.items() if rows}
+        if len(runs) < 2:
+            continue
+        for version, rows in runs.items():
+            lines.append(
+                f"| {arm} | {version} | {len(rows)} | {sum(r.solved for r in rows.values())} | "
+                f"{_money(sum(r.cost_usd for r in rows.values()))} |"
+            )
+        first, *others = list(runs.values())
+        changed = sorted(t for t in first for rows in others if t in rows and rows[t].solved != first[t].solved)
+        notes.append(f"- Arm {arm}: verdict changed between runs on {', '.join(dict.fromkeys(changed)) or 'no task'}.")
+    if not notes:
+        return []
+    return [*lines, "", *notes, ""]
+
+
+def render_results(ledger: Ledger, flat: dict, layout: dict | None = None) -> str:
     flat_price = flat["flat_price_usd"]
-    latest = {arm: ledger.latest(arm) for arm in ("A", "B", "C", "D", "E")}
+    headline = (layout or {}).get("headline", {})
+    latest = {arm: ledger.latest(arm, headline.get(arm)) for arm in ("A", "B", "C", "D", "E")}
     priced = {arm: apply_flat_price(rows.values(), flat_price) for arm, rows in latest.items()}
     evaluation = {
         arm: sorted((r for r in rows if r.split == "evaluation"), key=lambda r: r.task_id)
@@ -158,6 +200,7 @@ def render_results(ledger: Ledger, flat: dict) -> str:
         "Mean tokens per solved fix is the average prompt plus completion token count of the runs that verified.",
         "",
         *_timeout_caveat(latest),
+        *_repeat_runs(ledger, (layout or {}).get("repeats", {})),
         "## Quote accuracy (arm B costs, leave-one-out)",
         "",
     ]

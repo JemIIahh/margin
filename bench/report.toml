@@ -1,0 +1,13 @@
+# Which recorded runs the results page reports. `margin report` reads this file.
+# headline: the version of each arm that the arm tables use; repeats: versions of the same arm run again, shown side by side.
+
+[headline]
+A = "v2"
+B = "v2-graph"
+C = "v2"
+D = "v3-learn"
+E = "v4-jev"
+
+[repeats]
+D = ["v3-learn", "v3-learn-r2"]
+E = ["v4-jev", "v4-jev-r2"]

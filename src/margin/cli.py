@@ -261,7 +261,9 @@ def cmd_report(args: argparse.Namespace) -> int:
         )
         return 1
     out = Path(args.out or settings.root / "docs" / "results.md")
-    text = render_results(ledger, flat)
+    from margin.bench.report import load_layout
+
+    text = render_results(ledger, flat, load_layout(settings.root / "bench" / "report.toml"))
     if args.check:
         if not out.exists() or out.read_text() != text:
             print(f"{out} is stale; run `uv run margin report`")

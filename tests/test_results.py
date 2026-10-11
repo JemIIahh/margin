@@ -122,3 +122,38 @@ def test_results_page_says_which_costs_are_lower_bounds_because_of_api_timeouts(
     page = render_results(clean, FLAT)
     assert "lower bound" in page and "e2" in page and "2 API timeouts" in page
     assert "lower bound" not in render_results(ledger, FLAT)
+
+
+def _with_two_runs_of_d(tmp_path):
+    ledger = build_ledger(tmp_path)
+    first = rec(run_id="D1", task="e1", arm="D", solved=True, cost=0.5, price=2.4, quote={"p50": 1.2, "lo": 0.8, "hi": 1.6})
+    first.trace_tags = ["version:v1"]
+    second = rec(run_id="D2", task="e1", arm="D", solved=False, cost=0.7, price=2.4, quote={"p50": 1.2, "lo": 0.8, "hi": 1.6})
+    second.trace_tags = ["version:v1-r2"]
+    ledger.append(first)
+    ledger.append(second)
+    return ledger
+
+
+def test_the_report_layout_pins_which_run_of_an_arm_is_the_headline(tmp_path):
+    ledger = _with_two_runs_of_d(tmp_path)
+    assert "| D | 1 | 0% |" in render_results(ledger, FLAT)                              # without a layout: the latest run
+    pinned = render_results(ledger, FLAT, {"headline": {"D": "v1"}, "repeats": {}})
+    assert "| D | 1 | 100% |" in pinned
+
+
+def test_the_results_page_shows_every_repeat_run_and_which_tasks_changed(tmp_path):
+    ledger = _with_two_runs_of_d(tmp_path)
+    page = render_results(ledger, FLAT, {"headline": {"D": "v1"}, "repeats": {"D": ["v1", "v1-r2"]}})
+    assert "## Repeat runs" in page
+    assert "| D | v1 | 1 | 1 | $0.50 |" in page and "| D | v1-r2 | 1 | 0 | $0.70 |" in page
+    assert "e1" in page.split("## Repeat runs")[1]
+
+
+def test_the_report_layout_file_is_read(tmp_path):
+    from margin.bench.report import load_layout
+
+    path = tmp_path / "report.toml"
+    path.write_text('[headline]\nD = "v1"\n\n[repeats]\nD = ["v1", "v1-r2"]\n')
+    assert load_layout(path) == {"headline": {"D": "v1"}, "repeats": {"D": ["v1", "v1-r2"]}}
+    assert load_layout(tmp_path / "missing.toml") is None
