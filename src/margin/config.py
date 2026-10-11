@@ -44,6 +44,12 @@ class Settings:
     python_timeout_s: int = 20
     lessons_path: Path = ROOT / "bench" / "lessons.jsonl"
     lessons_max: int = 5
+    # arm E: Jev (TypeSafe) judges progress each turn; thresholds are code, not model output
+    judge_warmup_turns: int = 3
+    judge_stuck_below: float = 0.25
+    judge_repeat_at: float = 0.75
+    judge_ready_at: float = 0.8
+    judge_min_gap: int = 4
 
     @classmethod
     def from_env(cls, env: Mapping[str, str] | None = None) -> Settings:

@@ -17,7 +17,7 @@ from margin.errors import SimulatedCrash
 from margin.governor import Governor, NullGovernor
 from margin.ledger import Ledger, RunRecord, history_ledger, render_receipt, settle
 from margin.model import make_model_client
-from margin.pricing import PriceTable, SpendMeter
+from margin.pricing import PriceTable, SpendMeter, Usage
 from margin.sandbox import GitTampered
 from margin.state import RunState
 from margin.telemetry import span
@@ -42,6 +42,21 @@ def _abort_reason(stop: str, reason: str | None) -> str | None:
     return None if stop in ("end_turn", "verified") else (reason or stop)
 
 
+def _declined(task, arm, run_id, run_dir, started, intake, ledger, tags) -> RunRecord:
+    """A run the gate stopped: only the gate's own spend is lost, and nothing was cloned or run."""
+    record = RunRecord(
+        run_id=run_id, task_id=task.id, arm=arm, split=task.split, solved=False, cost_usd=intake.cost_usd,
+        price_usd=0.0, revenue_usd=0.0, margin_usd=-intake.cost_usd, tokens_total=intake.input_tokens,
+        abort_reason="declined at intake: " + ("; ".join(intake.reasons) or intake.decision),
+        duration_s=round(time.time() - started, 1),
+        started_at=time.strftime("%Y-%m-%dT%H:%M:%S%z", time.localtime(started)),
+        trace_tags=[*tags, "intake:declined"], verdict_reason=f"declined at intake ({intake.decision})",
+    )
+    ledger.append(record)
+    (run_dir / "receipt.md").write_text(render_receipt(record))
+    return record
+
+
 @span(kind="WORKFLOW", name="margin.run")
 def execute_run(
     task: Task,
@@ -57,9 +72,16 @@ def execute_run(
     faults: Any = None,
     after_turn_hook: Any = None,
     trace_tags: list[str] | None = None,
+    issue_text: str | None = None,
+    gate: Any = None,
+    variant_id: str | None = None,
+    jev: Any = None,
 ) -> RunRecord:
-    if arm not in ("A", "B", "C", "D"):
+    if arm not in ("A", "B", "C", "D", "E"):
         raise ValueError(f"unknown arm {arm!r}")
+    # The gate is part of arm E; on any other arm a gated run is a demo, as is any run on an intake variant.
+    if ((gate is not None and arm != "E") or variant_id) and not version.startswith("demo"):
+        raise ValueError("gated and variant runs are not benchmark runs: use a version starting with 'demo'")
     prices = PriceTable.load(settings.pricing_path)
     ledger = Ledger(settings.ledger_path)
     run_id = run_id or new_run_id(task.id, arm)
@@ -67,6 +89,17 @@ def execute_run(
     state = RunState(run_dir)
     (run_dir / "meta.json").write_text(json.dumps({"task_id": task.id, "arm": arm, "version": version}))
     started = time.time()
+    tags = [*(trace_tags or []), *([f"variant:{variant_id}"] if variant_id else [])]
+
+    issue = issue_text if issue_text is not None else task.issue_text(tasks_root or settings.root)
+    intake_cost = 0.0
+    if gate is not None:  # screen untrusted issue text before cloning anything or spending anything
+        intake = gate.screen(issue)
+        state.log("intake", **intake.to_dict())
+        intake_cost = intake.cost_usd
+        if intake.decision != "accept":
+            return _declined(task, arm, run_id, run_dir, started, intake, ledger, tags)
+        tags.append("intake:accepted")
 
     try:
         prep = prepare_run(task, run_dir, settings, venv_python=venv_python)
@@ -78,20 +111,19 @@ def execute_run(
             revenue_usd=0.0, margin_usd=0.0, tokens_total=0, abort_reason=reason,
             duration_s=round(time.time() - started, 1), fault=settings.fault,
             started_at=time.strftime("%Y-%m-%dT%H:%M:%S%z", time.localtime(started)),
-            trace_tags=trace_tags or [], verdict_reason=reason, infra_error=True,
+            trace_tags=tags, verdict_reason=reason, infra_error=True,
         )
         ledger.append(failed)
         (run_dir / "receipt.md").write_text(render_receipt(failed))
         return failed
     sandbox = prep.sandbox
-    issue = task.issue_text(tasks_root or settings.root)
 
     graph = None
     features: dict = {}
     quote: dict | None = None
     price = 0.0  # arms A and B are priced at report time (flat price)
     governor: Any = NullGovernor()
-    if arm in ("B", "C", "D"):
+    if arm in ("B", "C", "D", "E"):
         from margin.context import GraphContext  # added in Task 15
         from margin.quote import extract_features  # added in Task 14
 
@@ -99,7 +131,7 @@ def execute_run(
         feats = extract_features(issue, sandbox.root, prep.baseline_seconds, graph)
         features = feats.to_dict()
         state.log("features", **features)
-        if arm in ("C", "D"):
+        if arm in ("C", "D", "E"):
             from margin.quote import Quoter, training_rows  # added in Task 14
 
             saved = state.events("quote") if resume else []
@@ -122,10 +154,25 @@ def execute_run(
     )
     context = _initial_context(graph, issue, sandbox.root, settings, state)
     lessons = None
-    if arm == "D":  # what earlier jobs in this repository taught, never a lesson about this task itself
+    judge = None
+    if arm in ("D", "E"):  # what earlier jobs in this repository taught, never a lesson about this task itself
         from margin.lessons import lessons_for, load_lessons
 
-        lessons = lessons_for(task.id, task.repo, load_lessons(settings.lessons_path), settings.lessons_max)
+        if arm == "D":
+            lessons = lessons_for(task.id, task.repo, load_lessons(settings.lessons_path), settings.lessons_max)
+        else:  # arm E: Jev picks the lessons that fit this issue from every eligible one, and judges progress
+            from margin.jev import JEV_MODEL, ProgressJudge, make_jev, pick_lessons
+
+            jev = jev or make_jev()
+            judge = ProgressJudge(jev)
+            eligible = lessons_for(task.id, task.repo, load_lessons(settings.lessons_path), 50)
+            used_before = jev.input_tokens
+            lessons = pick_lessons(issue, eligible, jev, settings.lessons_max)
+            picked = Usage(input_tokens=jev.input_tokens - used_before)  # what Jev reported, metered like any call
+            if picked.input_tokens:
+                cost = meter.record(JEV_MODEL, picked)
+                state.log("model_usage", model=JEV_MODEL, usage=picked.to_dict(), cost=round(cost, 8), stop="lessons", role="judge")
+            state.log("lessons_picked", eligible=len(eligible), chosen=len(lessons))
         state.log("lessons", count=len(lessons))
     checkpoint = state.load_checkpoint() if resume else None
     if resume:  # even with no checkpoint yet: calls made before the kill were paid for and are in the event log
@@ -139,7 +186,7 @@ def execute_run(
             first_prompt=first_prompt(issue, context, task.target_tests, lessons), arm=arm,
             client=model_client, meter=meter, governor=governor, executor=executor,
             state=state, prices=prices, settings=settings, faults=faults, resume=checkpoint,
-            after_turn_hook=after_turn_hook,
+            after_turn_hook=after_turn_hook, judge=judge,
         )
     except SimulatedCrash:  # a killed process records nothing; `margin resume` continues it
         raise
@@ -183,16 +230,17 @@ def execute_run(
         abort_reason = f"harness error: {harness_error}"
     else:
         abort_reason = _abort_reason(result.stop, result.abort_reason)
-    revenue, margin = settle(price, verdict.solved, meter.total_usd)
+    total_cost = meter.total_usd + intake_cost  # the gate's own spend counts against the run
+    revenue, margin = settle(price, verdict.solved, total_cost)
     record = RunRecord(
         run_id=run_id, task_id=task.id, arm=arm, split=task.split, solved=verdict.solved,
-        cost_usd=meter.total_usd, price_usd=price, revenue_usd=revenue, margin_usd=margin,
+        cost_usd=total_cost, price_usd=price, revenue_usd=revenue, margin_usd=margin,
         tokens_total=meter.total_tokens, features=features, quote=quote, rung_events=result.rung_events,
         abort_reason=abort_reason,
         duration_s=round(time.time() - started, 1), fault=settings.fault,
         recoveries=len(state.events("recovery")) + len(state.events("retry")),
         started_at=time.strftime("%Y-%m-%dT%H:%M:%S%z", time.localtime(started)),
-        trace_tags=trace_tags or [], verdict_reason=verdict.reason, tests_touched=tests_touched,
+        trace_tags=tags, verdict_reason=verdict.reason, tests_touched=tests_touched,
         infra_error=harness_error is not None or result.stop == "error",
         api_timeouts=sum(1 for e in state.events("retry") if e.get("error") == "APITimeoutError")
         + (1 if (harness_error or "").startswith("APITimeoutError") else 0),

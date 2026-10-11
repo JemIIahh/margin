@@ -126,7 +126,7 @@ def _timeout_caveat(latest: dict[str, dict[str, RunRecord]]) -> list[str]:
 
 def render_results(ledger: Ledger, flat: dict) -> str:
     flat_price = flat["flat_price_usd"]
-    latest = {arm: ledger.latest(arm) for arm in ("A", "B", "C", "D")}
+    latest = {arm: ledger.latest(arm) for arm in ("A", "B", "C", "D", "E")}
     priced = {arm: apply_flat_price(rows.values(), flat_price) for arm, rows in latest.items()}
     evaluation = {
         arm: sorted((r for r in rows if r.split == "evaluation"), key=lambda r: r.task_id)
@@ -195,19 +195,28 @@ def render_results(ledger: Ledger, flat: dict) -> str:
             cell("C", task_id, _verdict), cell("C", task_id, governor),
         ]
         lines.append("| " + " | ".join(cells) + " |")
-    d_rows = by_arm.get("D", {})
-    if d_rows:  # arm D: arm C plus a coach when stuck, stop-when-verified, run_python and lessons from other tasks
+    about = {
+        "D": (
+            "Arm D is arm C with a coach (a stronger model that writes a note when the run is stuck) instead of the "
+            "downgrade, a stop once the fix verifies, a `run_python` tool, and lessons from other tasks of the same "
+            "repository. See `docs/notes/arm-d-evaluation.md`."
+        ),
+        "E": (
+            "Arm E is arm D with TypeSafe's Jev as a cheap judge: an intake gate on the issue, a per-turn progress judge "
+            "that decides when to coach or nudge, and a lesson picker. See `docs/notes/arm-e-evaluation.md`."
+        ),
+    }
+    for extra in ("D", "E"):
+        d_rows = by_arm.get(extra, {})
+        if not d_rows:
+            continue
         lines += [
             "",
-            "## Arm D per task",
+            f"## Arm {extra} per task",
             "",
-            (
-                "Arm D is arm C with a coach (a stronger model that writes a note when the run is stuck) instead of the "
-                "downgrade, a stop once the fix verifies, a `run_python` tool, and lessons from other tasks of the same "
-                "repository. See `docs/notes/arm-d-evaluation.md`."
-            ),
+            about[extra],
             "",
-            "| Task | D band | D price | D cost | D | Coach notes |",
+            f"| Task | {extra} band | {extra} price | {extra} cost | {extra} | Coach notes |",
             "|---|---|---|---|---|---|",
         ]
         for task_id in sorted(d_rows):

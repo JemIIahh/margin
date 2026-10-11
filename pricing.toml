@@ -43,3 +43,10 @@ input = 0.06
 output = 0.24
 cache_write = 0.06
 cache_read = 0.015
+
+# TypeSafe Jev (arm E's judge): docs.typesafe.ai/models, input tokens only, output is free
+[models."jev-latest"]
+input = 0.042
+output = 0.0
+cache_write = 0.0
+cache_read = 0.0

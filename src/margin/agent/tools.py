@@ -107,6 +107,7 @@ _BASE = ["read_file", "search_code", "edit_file", "write_file", "run_tests", "gi
 ARM_TOOLS = {
     "A": list(_BASE), "B": [*_BASE, "graph_impact"], "C": [*_BASE, "graph_impact"],
     "D": [*_BASE, "graph_impact", "run_python"],
+    "E": [*_BASE, "graph_impact", "run_python"],
 }
 
 
@@ -256,7 +257,7 @@ class ToolExecutor:
         return ToolOutput(self.sandbox.git_diff() or "(no changes)")
 
     def _tool_run_tests(self) -> ToolOutput:
-        full = self.arm in ("B", "C", "D")
+        full = self.arm in ("B", "C", "D", "E")
         args = list(self.test_args) if full else list(self.target_nodeids)
         junit = self.sandbox.home / f"junit-{self._test_runs}.xml"
         self._test_runs += 1
@@ -292,7 +293,7 @@ class ToolExecutor:
                 f"Full suite: {len(run.passed)} passed, {len(run.failed)} failed "
                 f"({len(self.baseline.failing)} already failing at the base commit)"
             )
-        if self.arm == "D":
+        if self.arm in ("D", "E"):
             self.green = full and not failing_targets and not new
             if self.green:
                 lines.append(

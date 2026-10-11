@@ -13,9 +13,31 @@ def _tasks_path(args: argparse.Namespace, settings: Settings) -> Path:
     return Path(args.tasks_file) if args.tasks_file else settings.root / "bench" / "tasks.toml"
 
 
+def _variant(variant_id: str, task, settings: Settings):
+    from margin.bench.intake_eval import load_variants
+
+    found = {v.id: v for v in load_variants(settings.root / "bench" / "intake" / "variants.toml")}
+    variant = found.get(variant_id)
+    if variant is None or variant.base_task != task.id:
+        raise SystemExit(f"variant {variant_id!r} does not belong to task {task.id!r}")
+    return variant, (settings.root / variant.issue_file).read_text(encoding="utf-8")
+
+
 def cmd_run(args: argparse.Namespace) -> int:
     settings = Settings.from_env()
     task = find_task(load_tasks(_tasks_path(args, settings)), args.task)
+    issue_text = variant_id = gate = None
+    if args.variant:
+        variant, issue_text = _variant(args.variant, task, settings)
+        variant_id = variant.id
+    if args.gate or args.arm == "E":  # the intake gate is part of arm E
+        from margin.intake import IntakeUnavailable, make_gate
+
+        try:
+            gate = make_gate()
+        except IntakeUnavailable as exc:
+            print(exc)
+            return 2
     tags = [f"arm:{args.arm}", f"task:{task.id}", f"split:{task.split}", f"version:{args.version}"]
     init_telemetry("margin", tags)  # must precede the first `import anthropic`
     try:
@@ -24,13 +46,71 @@ def cmd_run(args: argparse.Namespace) -> int:
 
         faults = FaultInjector(settings.fault) if settings.fault else None
         rec = execute_run(
-            task, args.arm, settings, run_id=args.run_id, version=args.version, trace_tags=tags, faults=faults
+            task, args.arm, settings, run_id=args.run_id, version=args.version, trace_tags=tags, faults=faults,
+            issue_text=issue_text, gate=gate, variant_id=variant_id,
         )
         print(f"{rec.run_id}: solved={rec.solved} cost=${rec.cost_usd:.4f} margin=${rec.margin_usd:.4f}")
         print(f"receipt: {settings.runs_dir / rec.run_id / 'receipt.md'}")
         return 0 if rec.solved else 1
     finally:
         shutdown_telemetry()
+
+
+def cmd_intake(args: argparse.Namespace) -> int:
+    import json
+
+    from margin.intake import IntakeUnavailable, make_gate
+
+    settings = Settings.from_env()
+    task = find_task(load_tasks(_tasks_path(args, settings)), args.task)
+    text = _variant(args.variant, task, settings)[1] if args.variant else task.issue_text(settings.root)
+    try:
+        gate = make_gate()
+    except IntakeUnavailable as exc:
+        print(exc)
+        return 2
+    verdict = gate.screen(text)
+    print(json.dumps(verdict.to_dict(), indent=2))
+    return 0 if verdict.decision == "accept" else 1
+
+
+def cmd_intake_eval(args: argparse.Namespace) -> int:
+    import json
+
+    from margin.bench.intake_eval import (
+        collect_items,
+        load_variants,
+        render_calibration_table,
+        render_intake_report,
+    )
+    from margin.intake import IntakeThresholds, IntakeUnavailable, make_gate
+    from margin.ledger import Ledger
+
+    settings = Settings.from_env()
+    thresholds = IntakeThresholds()
+    try:
+        gate = make_gate(thresholds)
+    except IntakeUnavailable as exc:
+        print(exc)
+        return 2
+    ledger = Ledger(settings.ledger_path)
+    items = collect_items(
+        gate=gate, split=args.split, tasks=load_tasks(_tasks_path(args, settings)),
+        variants=load_variants(settings.root / "bench" / "intake" / "variants.toml"),
+        read_text=lambda rel: (settings.root / rel).read_text(encoding="utf-8"),
+        benchmark_c=ledger.latest("C"), variant_rows=ledger.rows("C"), runs_dir=settings.runs_dir,
+    )
+    out = settings.root / "docs" / "evidence"
+    out.mkdir(parents=True, exist_ok=True)
+    (out / f"intake-decisions-{args.split}.jsonl").write_text(
+        "".join(json.dumps(i.to_dict(), sort_keys=True) + "\n" for i in items), encoding="utf-8"
+    )
+    if args.split == "calibration":
+        print(render_calibration_table(items))
+        return 0
+    (out / "intake.md").write_text(render_intake_report(items, thresholds), encoding="utf-8")
+    print(f"wrote {out / 'intake.md'}")
+    return 0
 
 
 def cmd_tasks_validate(args: argparse.Namespace) -> int:
@@ -265,11 +345,24 @@ def build_parser() -> argparse.ArgumentParser:
 
     run = sub.add_parser("run", help="run one task with one arm")
     run.add_argument("--task", required=True)
-    run.add_argument("--arm", required=True, choices=["A", "B", "C", "D"])
+    run.add_argument("--arm", required=True, choices=["A", "B", "C", "D", "E"])
     run.add_argument("--tasks-file", default=None)
     run.add_argument("--run-id", default=None)
     run.add_argument("--version", default="v1")
+    run.add_argument("--gate", action="store_true", help="screen the issue with the TypeSafe intake gate first")
+    run.add_argument("--variant", default=None, help="run an intake variant of this task (needs --version demo-*)")
     run.set_defaults(func=cmd_run)
+
+    intake = sub.add_parser("intake", help="screen one issue with the intake gate and print the verdict")
+    intake.add_argument("--task", required=True)
+    intake.add_argument("--variant", default=None)
+    intake.add_argument("--tasks-file", default=None)
+    intake.set_defaults(func=cmd_intake)
+
+    intake_eval = sub.add_parser("intake-eval", help="score the intake gate on clean issues and variants")
+    intake_eval.add_argument("--split", required=True, choices=["calibration", "evaluation"])
+    intake_eval.add_argument("--tasks-file", default=None)
+    intake_eval.set_defaults(func=cmd_intake_eval)
 
     tasks = sub.add_parser("tasks", help="inspect and validate the benchmark tasks")
     tasks_sub = tasks.add_subparsers(dest="tasks_command", required=True)
@@ -278,7 +371,7 @@ def build_parser() -> argparse.ArgumentParser:
     validate.add_argument("--tasks-file", default=None)
     validate.set_defaults(func=cmd_tasks_validate)
     bench = sub.add_parser("bench", help="run one arm over many tasks")
-    bench.add_argument("--arm", required=True, choices=["A", "B", "C", "D"])
+    bench.add_argument("--arm", required=True, choices=["A", "B", "C", "D", "E"])
     bench.add_argument("--split", default="all", choices=["all", "calibration", "evaluation"])
     bench.add_argument("--version", default="v1")
     bench.add_argument("--tasks-file", default=None)

@@ -12,6 +12,7 @@ from margin.agent.prompts import SYSTEM_PROMPT, digest_prompt, narrow_notice
 from margin.agent.tools import tool_schemas
 from margin.config import Settings
 from margin.governor import Rung
+from margin.jev import EDIT_NUDGE, JEV_MODEL, describe, exploring
 from margin.model import build_request, is_transient
 from margin.pricing import PriceTable, SpendMeter, Usage
 from margin.state import RunState
@@ -94,14 +95,17 @@ def run_agent(
     resume: dict | None = None,
     sleep: Callable = time.sleep,
     after_turn_hook: Callable[[int], None] | None = None,
+    judge: Any = None,
 ) -> AgentResult:
     model, effort = settings.main_model, settings.main_effort
     rung_events: list[dict] = []
     narrow_until: int | None = None
     # arm D: a coach instead of the downgrade, and an end to the run once the fix has verified
-    coaching = arm == "D"
+    coaching = arm in ("D", "E")
+    judging = arm == "E" and judge is not None  # arm E: Jev judges progress each turn instead of the fixed stall rule
     coach_model = settings.coach_model or settings.main_model
     coach_notes, last_progress_turn, green_turn = 0, 0, None
+    last_coach_turn = last_nudge_turn = -(10**6)
     if resume:
         messages, turn = resume["messages"], resume["turn"]
         model, effort = resume["model"], resume["effort"]
@@ -132,9 +136,9 @@ def run_agent(
             pass
 
     def coach(reason: str) -> None:
-        nonlocal coach_notes, last_progress_turn
+        nonlocal coach_notes, last_progress_turn, last_coach_turn
         coach_notes += 1
-        last_progress_turn = turn  # give the worker time to act on the note before judging it stuck again
+        last_progress_turn = last_coach_turn = turn  # give the worker time to act on the note before judging it again
         log_rung("COACH", reason)
         note = ask_coach(client, coach_model, coach_digest(executor, messages), meter=meter, state=state)
         if note:
@@ -150,13 +154,32 @@ def run_agent(
             return result("abort", decision.reason)
         if executor.progress.events > seen_progress:
             seen_progress, last_progress_turn = executor.progress.events, turn
+        verdict = None
+        if judging and turn >= settings.judge_warmup_turns and not getattr(executor, "green", False):
+            verdict = judge.assess(executor, messages)
+            if verdict is not None:  # Jev's tokens are part of the run's cost like any other call
+                jev_usage = Usage(input_tokens=verdict.input_tokens)
+                jev_cost = meter.record(JEV_MODEL, jev_usage)
+                state.log("model_usage", model=JEV_MODEL, usage=jev_usage.to_dict(), cost=round(jev_cost, 8), stop="judge", role="judge")
+                state.log("judge", turn=turn, **verdict.nouls)
         if coaching and coach_notes < settings.coach_max_notes and not getattr(executor, "green", False):
             if stuck_on_budget:
                 coach(decision.reason)
             elif decision.changed and decision.rung == Rung.NARROW:
                 coach(f"{decision.reason}; no fix verified yet")
+            elif verdict is not None:
+                stuck = verdict.nouls["progress"] < settings.judge_stuck_below or verdict.nouls["repeating"] >= settings.judge_repeat_at
+                if stuck and turn - last_coach_turn >= settings.judge_min_gap:
+                    coach(f"Jev judged the run stuck: {describe(verdict)}")
             elif turn - last_progress_turn >= settings.coach_stall_turns:
                 coach(f"no progress in {turn - last_progress_turn} turns")
+        if (
+            verdict is not None and verdict.nouls["ready_to_edit"] >= settings.judge_ready_at and exploring(messages)
+            and turn - last_nudge_turn >= settings.judge_min_gap
+        ):  # free: a fixed sentence, no model call
+            last_nudge_turn = turn
+            _append_notice(messages, EDIT_NUDGE)
+            state.log("nudge", turn=turn, ready_to_edit=verdict.nouls["ready_to_edit"])
         if decision.changed and decision.rung == Rung.DOWNGRADE and not coaching:
             model, effort = settings.fallback_model, settings.fallback_effort
             digest = executor.digest()
