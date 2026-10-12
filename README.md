@@ -10,6 +10,9 @@ cost and the margin.
 Built during neatHack 2026 (10 and 11 October) with [neatlogs](https://neatlogs.com), [Entire](https://entire.io),
 [cfo.ai](https://cfo.ai) and [TypeSafe](https://typesafe.ai).
 
+**Demo video (3:52):** [youtu.be/RByzMBocrWA](https://youtu.be/RByzMBocrWA): the problem, how one job runs step by step, how neatlogs,
+Entire and cfo.ai were part of the build, and what went wrong along the way.
+
 **See it:** [margin-agent.vercel.app](https://margin-agent.vercel.app) replays the recorded runs (a film of one job, a proof page for all
 12 bugs and five versions, and a what-if for the markup and the spending cap), and [its guide](https://margin-agent.vercel.app/guide) walks
 one job from issue to invoice with the commands to run it yourself. Both pages are generated from this repository's ledger

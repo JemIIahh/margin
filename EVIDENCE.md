@@ -7,6 +7,9 @@ run `make verify` to regenerate `docs/results.md` from it and fail if it differs
 > [`docs/evidence/posts.md`](docs/evidence/posts.md) as the builder publishes them.
 > `tests/test_evidence.py` refuses any leftover placeholder.
 
+## Demo video
+- 3:52, https://youtu.be/RByzMBocrWA. It covers the problem; how one job runs (screen, quote, govern, verify, bill) on a real bug the agent had never seen; how neatlogs was used on the incidents the agent ran into, including that its Incidents page raised nothing for this project and that its Investigate answers were wrong about why runs ended ([`docs/notes/neatlogs-incidents.md`](docs/notes/neatlogs-incidents.md)); and how Entire and cfo.ai were part of the project.
+
 ## The agent improved
 - Before and after, 12 evaluation tasks: [`docs/results.md`](docs/results.md).
 - Watch it: the recorded runs replayed as a film of one job, a proof page for all 12 bugs and five versions, and a what-if for the markup
