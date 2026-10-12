@@ -26,6 +26,8 @@ run `make verify` to regenerate `docs/results.md` from it and fail if it differs
 
 - A stress test on three harder tasks (fixes of 50 to 330 source lines in repositories the search never used): none was verified in three rounds, and nothing was billed. Under the quoted cap all three stopped before an edit; with four times the cap and twice the turns all three edited, Click's target tests went from 63 failing to 30 and Black #1245's from two to one; and with a stronger worker model (`claude-sonnet-4.6`) Black #4349's target test passed but a documentation test broke and the cap ended the run, one edit short. The test cost $2.99, and the quoter, trained on repositories up to 7,300 lines, quoted the 103,000-line one like a one-line fix ([`docs/notes/stress-test.md`](docs/notes/stress-test.md)).
 
+- What neatlogs showed us about our incidents: its Incidents page raised nothing for this project, and Investigate listed the right runs (10 with no edit, one lost to a network error) but blamed the coach each time we asked why they ended, when the spending cap or the turn limit did; we changed the trace to state the outcome ([`docs/notes/neatlogs-incidents.md`](docs/notes/neatlogs-incidents.md)).
+
 - How other agents are priced, and what Margin combines that we did not find elsewhere: [`docs/notes/landscape.md`](docs/notes/landscape.md) (public pricing pages checked 2026-10-11, with the unverified items marked).
 
 ## You used neatlogs
