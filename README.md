@@ -175,7 +175,7 @@ a row to `runs/ledger.jsonl`.
 
 - **Small sample.** 12 evaluation issues, one run per task and arm, one cheap worker model. A difference of one or two tasks is within the
   run-to-run noise of the same code.
-- **Larger fixes are not shown.** On three harder real issues (fixes of 50 to 330 source lines, in repositories 1.6 to 14 times larger than any the quoter had seen) none was fixed in two rounds: under the quoted cap every run stopped before an edit, and with four times the runway the agent edited and moved toward the fix (Click: 63 failing target tests down to 30) but verified none, so nothing was billed ([`docs/notes/stress-test.md`](docs/notes/stress-test.md)).
+- **Larger fixes are not shown.** On three harder real issues (fixes of 50 to 330 source lines, in repositories 1.6 to 14 times larger than any the quoter had seen) none was verified: under the quoted cap every run stopped before an edit; with four times the runway the agent edited and moved toward the fix (Click: 63 failing target tests down to 30); and with a stronger worker model one target test passed but a documentation test broke, so nothing was billed ([`docs/notes/stress-test.md`](docs/notes/stress-test.md)).
 - **Needs tests.** Margin judges a fix by tests that go from failing to passing, so an issue without such tests cannot be priced yet.
 - **Not a security boundary.** Test code runs as the same user and the network is not blocked; the intake gate is a second layer, and its
   attacks were templates we wrote.
@@ -195,6 +195,6 @@ a row to `runs/ledger.jsonl`.
 - [`EVIDENCE.md`](EVIDENCE.md): every claim, linked to something you can open
 - [`docs/notes/audit-2026-10-11.md`](docs/notes/audit-2026-10-11.md): the audit of 56 recorded runs that led to arms D and E
 - [`docs/notes/live-test.md`](docs/notes/live-test.md): one live run on a bug outside the benchmark, and what its tests did not catch
-- [`docs/notes/stress-test.md`](docs/notes/stress-test.md): three harder tasks, none fixed in two rounds, and why (the cap, the turn limit and the quote)
+- [`docs/notes/stress-test.md`](docs/notes/stress-test.md): three harder tasks, none verified in three rounds, and why (the cap, the turn limit, the quote and the worker model)
 - [`hackathon.md`](hackathon.md): the build log
 - [`docs/superpowers/specs/2026-10-10-margin-design.md`](docs/superpowers/specs/2026-10-10-margin-design.md): the design

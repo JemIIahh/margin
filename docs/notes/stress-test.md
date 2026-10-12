@@ -5,10 +5,12 @@ Margin does when the work is larger. Three real closed issues in repositories th
 upstream by a change of 50 to 330 source lines. One run each of arm E (the full product), as a customer would get it:
 the cap is the top of the quoted band, nothing else is changed.
 
-**Result: none of the three was fixed, in either round.** Under the quoted cap (round 1) none of the runs made a single
+**Result: none of the three was verified, in any round.** Under the quoted cap (round 1) none of the runs made a single
 edit. With four times the cap and twice the turns (round 2) all three edited, and two made real progress: Click went from
-63 failing target tests to 30, and Black #1245 from two to one, with nothing else broken. Nothing was billed for any of
-them. The stress test cost $1.73 in all ($0.36 and $1.37).
+63 failing target tests to 30, and Black #1245 from two to one, with nothing else broken. A third round gave Black #4349 a
+stronger worker model (`claude-sonnet-4.6` in place of `claude-haiku`) and 12 times the cap: the bug was fixed, the target
+test passed, and the run was still refused, because the new feature was not documented and a repository test checks that.
+Nothing was billed for any of them. The stress test cost $2.99 in all ($0.36, $1.37 and $1.27).
 
 ## The tasks
 
@@ -86,6 +88,36 @@ results, and moves toward the fix. On the largest task (Click, 63 tests across f
 there. What it does not show is that more runway would have finished any of them: Click might have converged in another 30
 turns or might not, and Black #4349 was on the wrong function.
 
+
+## Round three: a stronger worker
+
+Round two left open whether the limit was runway or the worker model. So Black #4349 was run once more with
+`claude-sonnet-4.6` as the worker (the model the coach already uses, three times the price of `claude-haiku` per token:
+$3.30 against $1.10 per million input tokens), the cap at 12 times the quote's top ($1.34) so that it could take a comparable
+number of turns, 60 turns and a $1.50 ceiling. Everything else was unchanged: arm E, the same tools, the same Jev judge and
+coach.
+
+| | Haiku worker, round 2 | Sonnet worker, round 3 |
+|---|---|---|
+| Cap, spent | $0.448, $0.422 | $1.345, $1.267 |
+| Turns, edits | 56, 9 | 45, 5 |
+| Target test | still failing | **passes** (after the 5th edit) |
+| Files changed | `linegen.py` | `linegen.py` and `mode.py` (a new preview feature, as the maintainers did) |
+| Tests newly broken | 0 | 1: `test_docs::test_feature_lists_are_up_to_date` |
+| Verdict | not verified | not verified |
+| Billed | $0 | $0 |
+
+The Sonnet worker found the right design, added the feature behind Black's preview convention, and got the target to
+pass. The one test it broke checks that every preview feature is listed in `docs/the_black_code_style/future_style.md`;
+the real fix wrote that documentation. The agent saw the failure in its last test run and stopped on the cap before it
+could write the entry, so the run ended one small edit short. The verifier did what it is for: a fix that breaks a passing
+test is not billed.
+
+What this adds: on this task the worker model was a real limit. The cheap model made nine edits in 56 turns and never got
+the target test to pass; the stronger one did it in five edits. What it does not show is a solve (it ended unverified), a
+rate (one run), or that the stronger model is the right default: it cost $1.27 to the quoted price of $0.17, seven and a
+half times over. Matching a job to a worker model by difficulty is the open design question.
+
 ## What this shows
 
 - **The protections held.** Each run stopped at its cap or turn limit, nothing was billed for a failed fix, and the
@@ -104,9 +136,10 @@ turns or might not, and Black #4349 was on the wrong function.
 
 ## What this does not show
 
-- **Whether the agent can solve these at all.** Round two moved toward a fix on two of three but verified none; a third
-  round with more turns on Click, or a stronger worker model, would be the test.
-- A solve rate. It is one run on each of three tasks per round, with a cheap worker model (`claude-haiku`).
+- **A solve.** No run ended verified. The closest were Click (33 of 63 target tests fixed, turn limit) and Black #4349 with
+  the stronger worker (target passes, one documentation test broken, cap reached).
+- A solve rate, or the stronger worker's effect on the other two tasks. Rounds one and two are one run on each of three
+  tasks with a cheap worker model (`claude-haiku`); round three is one run on one task.
 - That Margin is bad at hard tasks in general: it shows what it does under the cap a customer would be quoted today.
 
-Receipts for both rounds: [`docs/evidence/live/`](../evidence/live/).
+Receipts for all three rounds: [`docs/evidence/live/`](../evidence/live/).
