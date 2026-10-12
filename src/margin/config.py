@@ -27,6 +27,7 @@ class Settings:
     max_turns: int = 30
     expected_output_tokens: int = 4000
     run_hard_cap_usd: float = 5.0
+    cap_multiple: float = 1.0  # tests only: the governor's cap as a multiple of the quote's top; the price never changes
     bench_budget_usd: float = 50.0
     default_cost_usd: float = 1.0
     downgrade_at: float = 0.6
@@ -67,6 +68,7 @@ _ENV_FIELDS = [
     ("MARGIN_TARGET_MARKUP", "target_markup", float),
     ("MARGIN_BENCH_BUDGET_USD", "bench_budget_usd", float),
     ("MARGIN_RUN_HARD_CAP_USD", "run_hard_cap_usd", float),
+    ("MARGIN_CAP_MULTIPLE", "cap_multiple", float),
     ("MARGIN_DOWNGRADE_AT", "downgrade_at", float),
     ("MARGIN_NARROW_AT", "narrow_at", float),
     ("MARGIN_MAX_TURNS", "max_turns", int),

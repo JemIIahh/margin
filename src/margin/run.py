@@ -130,6 +130,10 @@ def execute_run(
     # The gate is part of arm E; on any other arm a gated run is a demo, as is any run on an intake variant.
     if ((gate is not None and arm != "E") or variant_id) and not version.startswith("demo"):
         raise ValueError("gated and variant runs are not benchmark runs: use a version starting with 'demo'")
+    if settings.cap_multiple <= 0:
+        raise ValueError(f"cap_multiple must be positive, got {settings.cap_multiple}")
+    if settings.cap_multiple != 1.0 and not version.startswith(("demo", "live")):
+        raise ValueError("a run with a cap multiple is not a benchmark run: use a version starting with 'live' or 'demo'")
     prices = PriceTable.load(settings.pricing_path)
     if arm in ("D", "E"):
         _require_priced(prices, settings.coach_model or settings.main_model)
@@ -139,7 +143,7 @@ def execute_run(
     state = RunState(run_dir)
     (run_dir / "meta.json").write_text(json.dumps({"task_id": task.id, "arm": arm, "version": version}))
     started = time.time()
-    tags = [*(trace_tags or []), *([f"variant:{variant_id}"] if variant_id else [])]
+    tags = [*(trace_tags or []), *([f"variant:{variant_id}"] if variant_id else []), *([f"cap:x{settings.cap_multiple:g}"] if settings.cap_multiple != 1.0 else [])]
 
     issue = issue_text if issue_text is not None else task.issue_text(tasks_root or settings.root)
     intake_cost = _restored_intake_cost(state) if resume else 0.0
@@ -194,7 +198,7 @@ def execute_run(
                 quote = {"p50": quoted.p50, "lo": quoted.lo, "hi": quoted.hi}
                 price = quoted.price(settings.target_markup)
                 state.log("quote", price=price, **quote)
-            governor = Governor(quote["hi"], settings.downgrade_at, settings.narrow_at)
+            governor = Governor(quote["hi"] * settings.cap_multiple, settings.downgrade_at, settings.narrow_at)  # the price stays the quoted one
 
     meter = SpendMeter(prices)
     executor = ToolExecutor(
