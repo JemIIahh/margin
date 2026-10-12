@@ -98,19 +98,17 @@ def trace(name: str, kind: str, **attrs: Any) -> Iterator[Any]:
             raise
 
 
-def annotate(**attrs: Any) -> None:
-    """Stamp attributes on the span that is open now (the run's workflow span, once its work is done).
+def record_outcome(**attrs: Any) -> None:
+    """Record why a run ended as a span of its own, the last child of the run's workflow span.
 
-    Telemetry must never fail a run, and without a key this does nothing.
+    neatlogs' workflow span is not OpenTelemetry's current span, so attributes cannot be added to it from inside the run;
+    a child span made with neatlogs' own `trace` is visible in the span tree and to neatlogs' Investigate, like the
+    governor's spans. Telemetry must never fail a run, and without a key this does nothing.
     """
     if not _enabled:
         return
-    with contextlib.suppress(Exception):
-        from opentelemetry import trace as otel
-
-        current = otel.get_current_span()
-        for key, value in attrs.items():
-            current.set_attribute(key, coerce(value))
+    with contextlib.suppress(Exception), trace("margin.outcome", kind="CHAIN", **attrs):
+        pass
 
 
 def record_failure(name: str, detail: str, kind: str = "TOOL") -> None:

@@ -20,7 +20,7 @@ from margin.model import make_model_client
 from margin.pricing import PriceTable, SpendMeter, Usage
 from margin.sandbox import GitTampered
 from margin.state import RunState
-from margin.telemetry import annotate, span
+from margin.telemetry import record_outcome, span
 from margin.verify import Verdict, final_verdict
 
 
@@ -284,11 +284,18 @@ def execute_run(
         + (1 if (harness_error or "").startswith("APITimeoutError") else 0),
     )
     edits = sum(1 for e in state.events("tool_call") if e.get("name") in ("edit_file", "write_file"))
-    annotate(**{  # why the run ended, on the root span itself, so nobody has to guess from the spans below it
-        "margin.outcome": "verified" if record.solved else ("infrastructure failure" if record.infra_error else "not verified"),
-        "margin.stop_reason": result.stop, "margin.stop_detail": abort_reason or "", "margin.turns": result.turns,
-        "margin.edits": edits, "margin.solved": record.solved, "margin.cost_usd": record.cost_usd,
-        "margin.price_usd": record.price_usd, **({"margin.cap_usd": governor.cap} if hasattr(governor, "cap") else {}),
+    cap = getattr(governor, "cap", None)
+    outcome = "verified" if record.solved else ("infrastructure failure" if record.infra_error else "not verified")
+    stopped_by = abort_reason or result.stop
+    record_outcome(**{  # why the run ended, in the trace itself, so nobody has to guess from the spans around it
+        "margin.summary": (
+            f"{outcome}. Stopped by: {stopped_by}. {edits} edits made. The coach wrote {len(state.events('coach'))} note(s); "
+            f"a coach note is advice and never ends a run. Spent ${record.cost_usd:.4f}"
+            + (f" of a ${cap:.4f} spending cap." if cap else ".")
+        ),
+        "margin.outcome": outcome, "margin.stop_reason": result.stop, "margin.stop_detail": abort_reason or "",
+        "margin.turns": result.turns, "margin.edits": edits, "margin.solved": record.solved,
+        "margin.cost_usd": record.cost_usd, "margin.price_usd": record.price_usd, **({"margin.cap_usd": cap} if cap else {}),
     })
     ledger.append(record)
     (run_dir / "receipt.md").write_text(render_receipt(record))
