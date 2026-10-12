@@ -124,7 +124,7 @@ Checked on a fresh clone with no `.env`:
 ```bash
 git clone https://github.com/JemIIahh/margin.git && cd margin
 uv sync
-make verify                                 # 472 tests, offline; regenerates docs/results.md from the stored ledger and checks it
+make verify                                 # 477 tests, offline; regenerates docs/results.md from the stored ledger and checks it
 uv run margin quote --task tabulate-241     # free, no model call: the price band, learned from the published ledger
 open docs/receipts.html                     # one card per recorded run, verified and not verified
 open docs/console.html                      # the recorded runs as a film, a proof page and a what-if

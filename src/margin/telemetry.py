@@ -98,6 +98,21 @@ def trace(name: str, kind: str, **attrs: Any) -> Iterator[Any]:
             raise
 
 
+def annotate(**attrs: Any) -> None:
+    """Stamp attributes on the span that is open now (the run's workflow span, once its work is done).
+
+    Telemetry must never fail a run, and without a key this does nothing.
+    """
+    if not _enabled:
+        return
+    with contextlib.suppress(Exception):
+        from opentelemetry import trace as otel
+
+        current = otel.get_current_span()
+        for key, value in attrs.items():
+            current.set_attribute(key, coerce(value))
+
+
 def record_failure(name: str, detail: str, kind: str = "TOOL") -> None:
     """Emit a span marked as failed for an action that failed and was then recovered from."""
     if not _enabled:

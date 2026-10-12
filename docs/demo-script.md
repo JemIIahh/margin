@@ -11,7 +11,7 @@ TypeSafe. Say once that this is 12 real issues with one run each, on the event's
 - **Privacy:** run the terminal full screen with a plain prompt (`export PS1='$ '`), keep `.env` closed, collapse the neatlogs sidebar
   (your name is in it), and use full-screen browser windows so tabs and addresses do not show.
 - **Warm-up:** run `uv run margin intake --task sqlparse-826` once before recording; the first Jev call of the day can take about 10 seconds.
-- Run `make verify` first; it should print `472 passed` and `docs/results.md is up to date`.
+- Run `make verify` first; it should print `477 passed` and `docs/results.md is up to date`.
 
 ## 0:00 to 0:25, the problem
 
